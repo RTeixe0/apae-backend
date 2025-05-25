@@ -23,3 +23,4 @@ Thumbs.db
 
 # Firebase key (evita vazar dados sensíveis)
 config/firebase-key.json
+config/apae-eventos-firebase-adminsdk-fbsvc-1307679f73.json
