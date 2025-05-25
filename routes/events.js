@@ -1,10 +1,11 @@
-// routes/events.js
 const express = require('express');
 const router = express.Router();
-const verifyToken = require('../middlewares/authMiddleware');
+const {
+  createEvent,
+  listEvents
+} = require('../controllers/eventsController');
 
-router.post('/events', verifyToken, (req, res) => {
-  // lógica de criação do evento
-});
+router.post('/', createEvent);
+router.get('/', listEvents);
 
 module.exports = router;
