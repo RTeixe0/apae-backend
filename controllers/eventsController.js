@@ -29,7 +29,6 @@ exports.listEvents = async (req, res) => {
 
     const snapshot = await db
       .collection('events')
-      .where('organizadorId', '==', userId)
       .get();
 
     const eventos = [];
