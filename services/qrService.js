@@ -1,5 +1,5 @@
 const QRCode = require('qrcode');
-const Jimp = require('jimp');
+const Jimp = require('jimp').default;
 const { bucket } = require('../config/firebase');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
