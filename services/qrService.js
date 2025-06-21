@@ -1,15 +1,15 @@
-const QRCode = require('qrcode');
-const Jimp = require('jimp').default;
-const { bucket } = require('../config/firebase');
-const { v4: uuidv4 } = require('uuid');
-const path = require('path');
-const fs = require('fs');
+const QRCode = require("qrcode");
+const Jimp = require("jimp").default;
+const { bucket } = require("../config/firebase");
+const { v4: uuidv4 } = require("uuid");
+const path = require("path");
+const fs = require("fs");
 
 exports.generate = async (code) => {
-  const tempDir = path.join(__dirname, '../temp');
+  const tempDir = path.join(__dirname, "../temp");
   const qrPath = path.join(tempDir, `${code}.png`);
   const finalPath = path.join(tempDir, `${code}_logo.png`);
-  const logoPath = path.join(__dirname, '../assets/logo_apae.png');
+  const logoPath = path.join(__dirname, "../assets/logo_apae.png");
 
   try {
     if (!fs.existsSync(tempDir)) {
@@ -17,7 +17,7 @@ exports.generate = async (code) => {
     }
 
     await QRCode.toFile(qrPath, code, {
-      color: { dark: '#000000', light: '#FFFFFF' },
+      color: { dark: "#000000", light: "#FFFFFF" },
       margin: 1,
       width: 500,
     });
@@ -40,8 +40,8 @@ exports.generate = async (code) => {
       metadata: {
         firebaseStorageDownloadTokens: token,
       },
-      contentType: 'image/png',
-      cacheControl: 'public, max-age=31536000',
+      contentType: "image/png",
+      cacheControl: "public, max-age=31536000",
     };
 
     await bucket.upload(finalPath, {
@@ -53,9 +53,11 @@ exports.generate = async (code) => {
     fs.unlinkSync(finalPath);
 
     // 7. Retorna URL pública
-    return `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(destination)}?alt=media&token=${token}`;
+    return `https://firebasestorage.googleapis.com/v0/b/${
+      bucket.name
+    }/o/${encodeURIComponent(destination)}?alt=media&token=${token}`;
   } catch (err) {
-    console.error('Erro ao gerar QR Code com logo:', err);
+    console.error("Erro ao gerar QR Code com logo:", err);
     throw err;
   }
 };
