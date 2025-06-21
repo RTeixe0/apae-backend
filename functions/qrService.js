@@ -1,5 +1,5 @@
 const QRCode = require("qrcode");
-const Jimp = require("jimp");
+const { Jimp } = require("jimp");
 const { storage } = require("firebase-admin");
 const { v4: uuidv4 } = require("uuid");
 
@@ -16,16 +16,19 @@ exports.generateWithLogo = async (code) => {
 
     console.log("QR Code gerado em buffer com sucesso");
 
-    const bucket = storage().bucket("apae-eventos.firebasestorage.app");
+    const bucket = storage().bucket("apae-eventos.firebasestorage.app"); // <-- CORRETO
 
     const [logoBuffer] = await bucket.file("logos/logo_apae.png").download();
-
     console.log("Logo carregada do bucket, tamanho:", logoBuffer?.length);
 
-    const qr = await Jimp.read(qrBuffer);
-    const logo = await Jimp.read(logoBuffer);
+    const qr = await Jimp.read(qrBuffer); // <-- aqui
+    const logo = await Jimp.read(logoBuffer); // <-- aqui
 
-    logo.resize(qr.bitmap.width * 0.2, Jimp.AUTO);
+    logo.resize({
+      w: Math.floor(qr.bitmap.width * 0.2),
+      h: Jimp.AUTO,
+    });
+
     const x = (qr.bitmap.width - logo.bitmap.width) / 2;
     const y = (qr.bitmap.height - logo.bitmap.height) / 2;
 
@@ -34,7 +37,7 @@ exports.generateWithLogo = async (code) => {
       opacitySource: 1,
     });
 
-    const finalBuffer = await qr.getBufferAsync(Jimp.MIME_PNG);
+    const finalBuffer = await qr.getBuffer("image/png");
 
     const destination = `qrcodes/${code}.png`;
     const file = bucket.file(destination);
@@ -59,5 +62,3 @@ exports.generateWithLogo = async (code) => {
     throw err;
   }
 };
-// Adicione um comentário qualquer
-// Redeploy forçado
