@@ -59,3 +59,5 @@ exports.generateWithLogo = async (code) => {
     throw err;
   }
 };
+// Adicione um comentário qualquer
+// Redeploy forçado
