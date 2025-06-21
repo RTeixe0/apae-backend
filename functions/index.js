@@ -11,7 +11,10 @@ const db = getFirestore();
 const storage = getStorage();
 
 exports.onTicketCreated = onDocumentCreated(
-  "tickets/{ticketId}",
+  {
+    region: "southamerica-east1",
+    document: "tickets/{ticketId}",
+  },
   async (event) => {
     const ticketData = event.data?.data();
     const ticketId = event.params.ticketId;
