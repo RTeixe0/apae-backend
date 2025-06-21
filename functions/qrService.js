@@ -16,7 +16,7 @@ exports.generateWithLogo = async (code) => {
 
     // 2. Lê QR e logo como Jimp
     const qr = await Jimp.read(qrBuffer);
-    const logoPath = path.join(__dirname, "/assets/logo_apae.png");
+    const logoPath = path.join(__dirname, "logo_apae.png");
     const logo = await Jimp.read(logoPath);
 
     // 3. Redimensiona logo
