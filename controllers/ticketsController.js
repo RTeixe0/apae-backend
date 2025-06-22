@@ -11,7 +11,7 @@ exports.generateTicket = async (req, res) => {
     const newTicketRef = db.collection("tickets").doc();
     const code = newTicketRef.id;
 
-    const qrUrl = await qrService.generate(code);
+    // const qrUrl = await qrService.generate(code);
 
     await newTicketRef.set({
       eventId,
