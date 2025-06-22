@@ -1,0 +1,11 @@
+ct: "Seu ingresso para o evento da APAE",
+    html: `
+      <h2>Olá!</h2>
+      <p>Seu ingresso foi gerado com sucesso. Apresente o QR Code abaixo no evento:</p>
+      <img src="${qrUrl}" alt="QR Code" style="width:200px;" />
+      <p><strong>Código do ingresso:</strong> ${code}</p>
+    `,
+  };
+
+  await transporter.sendMail(mailOptions);
+};
