@@ -1,38 +1,64 @@
 const nodemailer = require("nodemailer");
+const axios = require("axios");
+const fs = require("fs");
+const path = require("path");
 
-// Transporter configurado para Firebase Functions (sem .env)
+// Transporter do Nodemailer
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
   port: 587,
-  secure: false, // usar true apenas com porta 465
+  secure: false,
   auth: {
     user: "eventosapae4@gmail.com",
-    pass: "znxa aghv ckuh wbai", // App password gerado no Gmail
+    pass: "znxa aghv ckuh wbai",
   },
 });
 
 /**
- * Envia o ingresso com QR Code por e-mail
+ * Envia o ingresso por e-mail com QR Code no corpo e em anexo
  * @param {string} to - e-mail do participante
  * @param {string} qrUrl - URL do QR Code
  * @param {string} code - código do ingresso
+ * @param {string} eventName - nome do evento
  */
-exports.sendTicketEmail = async (to, qrUrl, code) => {
-  const mailOptions = {
-    from: `"APAE Eventos" <eventosapae4@gmail.com>`,
-    to,
-    subject: "Seu ingresso para o evento da APAE",
-    html: `
-      <h2>Olá!</h2>
-      <p>Seu ingresso foi gerado com sucesso. Apresente o QR Code abaixo no evento:</p>
-      <img src="${qrUrl}" alt="QR Code" style="width:200px;" />
-      <p><strong>Código do ingresso:</strong> ${code}</p>
-    `,
-  };
-
+exports.sendTicketEmail = async (
+  to,
+  qrUrl,
+  code,
+  eventName = "Evento da APAE"
+) => {
   try {
+    // Baixa o QR Code temporariamente para anexar
+    const response = await axios.get(qrUrl, { responseType: "arraybuffer" });
+    const qrImage = Buffer.from(response.data, "binary");
+
+    const mailOptions = {
+      from: `"APAE Eventos" <eventosapae4@gmail.com>`,
+      to,
+      subject: `🎫 Seu ingresso para ${eventName}`,
+      html: `
+        <h2>Olá!</h2>
+        <p>Você está confirmado para o <strong>${eventName}</strong>!</p>
+        <p>Apresente o QR Code abaixo na entrada do evento:</p>
+        <img src="cid:qrcode" style="width:200px;" alt="QR Code" />
+        <p><strong>Código do ingresso:</strong> ${code}</p>
+        <p>Nos vemos lá! 💙</p>
+      `,
+      attachments: [
+        {
+          filename: "qrcode.png",
+          content: qrImage,
+          cid: "qrcode", // usado no <img src="cid:qrcode">
+        },
+        {
+          filename: `Ingresso-${eventName.replace(/\s+/g, "_")}-${code}.png`,
+          content: qrImage,
+        },
+      ],
+    };
+
     const result = await transporter.sendMail(mailOptions);
-    console.log("Email enviado com sucesso:", result.messageId);
+    console.log("E-mail enviado com sucesso:", result.messageId);
   } catch (err) {
     console.error("Erro ao enviar e-mail:", err);
     throw err;

@@ -20,18 +20,34 @@ exports.onTicketCreated = onDocumentCreated(
     const ticketId = event.params.ticketId;
 
     try {
+      // 1. Busca nome do evento
+      const eventDoc = await db
+        .collection("events")
+        .doc(ticketData.eventId)
+        .get();
+      const eventName = eventDoc.exists
+        ? eventDoc.data().nome
+        : "Evento da APAE";
+
+      // 2. Gera QR Code
       const qrUrl = await qrService.generateWithLogo(ticketId);
 
+      // 3. Atualiza ticket com QR gerado
       await db.collection("tickets").doc(ticketId).update({
         qrUrl,
       });
 
       console.log("QR gerado e salvo com sucesso para:", ticketId);
 
-      await emailService.sendTicketEmail(ticketData.email, qrUrl, ticketId);
+      // 4. Envia e-mail com nome real do evento
+      await emailService.sendTicketEmail(
+        ticketData.email,
+        qrUrl,
+        ticketId,
+        eventName
+      );
     } catch (err) {
       console.error("Erro ao processar ticket:", err);
     }
   }
 );
-//update
