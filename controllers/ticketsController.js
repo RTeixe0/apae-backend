@@ -7,10 +7,10 @@ exports.generateTicket = async (req, res) => {
   try {
     const { eventId, tipo, email } = req.body;
 
-    // Cria novo ticket no Firestore
     const newTicketRef = db.collection("tickets").doc();
     const code = newTicketRef.id;
 
+    // Geração e envio desativados (feito via serverless)
     // const qrUrl = await qrService.generate(code);
 
     await newTicketRef.set({
@@ -18,13 +18,12 @@ exports.generateTicket = async (req, res) => {
       tipo,
       email,
       usado: false,
-      qrUrl,
+      // qrUrl,
     });
 
-    // Envia por email
-    await emailService.sendTicketEmail(email, qrUrl, code);
+    // await emailService.sendTicketEmail(email, qrUrl, code);
 
-    res.status(201).json({ id: code, qrUrl });
+    res.status(201).json({ id: code /*, qrUrl */ });
   } catch (err) {
     console.error("Erro ao gerar ticket:", err);
     res.status(500).json({ error: "Erro ao gerar ticket" });
