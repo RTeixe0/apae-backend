@@ -1,59 +1,65 @@
 const QRCode = require("qrcode");
-const { Jimp } = require("jimp");
+const sharp = require("sharp");
 const { storage } = require("firebase-admin");
 const { v4: uuidv4 } = require("uuid");
 
 exports.generateWithLogo = async (code) => {
   try {
-    console.log("Iniciando geração do QR Code para:", code);
+    console.log("🔧 Gerando QR Code com Sharp:", code);
 
+    // Gera QR Code em PNG buffer
     const qrBuffer = await QRCode.toBuffer(code, {
-      color: { dark: "#000000", light: "#FFFFFF" },
-      margin: 1,
-      width: 500,
       errorCorrectionLevel: "H",
+      type: "png",
+      width: 500,
+      margin: 1,
+      color: { dark: "#000000", light: "#FFFFFF" },
     });
 
-    console.log("QR Code gerado em buffer com sucesso");
+    console.log("✅ QR Code gerado");
 
+    // Baixa logo do bucket
     const bucket = storage().bucket("apae-eventos.firebasestorage.app");
     const [logoBuffer] = await bucket.file("logos/logo_apae.png").download();
-    console.log("Logo carregada do bucket, tamanho:", logoBuffer?.length);
+    console.log("✅ Logo baixada do bucket");
 
-    const qr = await Jimp.read(qrBuffer);
-    const logo = await Jimp.read(logoBuffer);
+    // Redimensiona a logo (ex: 22% do QR)
+    const logoResized = await sharp(logoBuffer)
+      .resize({ width: 110 }) // 500 * 0.22
+      .toBuffer();
 
-    // Redimensiona a logo
-    const logoWidth = Math.floor(qr.bitmap.width * 0.22);
-    logo.resize(logoWidth, Jimp.AUTO);
+    // Calcula posição central
+    const qrMetadata = await sharp(qrBuffer).metadata();
+    const x = Math.floor((qrMetadata.width - 110) / 2);
+    const y = Math.floor((qrMetadata.height - 110) / 2);
 
-    const x = (qr.bitmap.width - logo.bitmap.width) / 2;
-    const y = (qr.bitmap.height - logo.bitmap.height) / 2;
+    // Composita a logo no centro
+    const finalBuffer = await sharp(qrBuffer)
+      .composite([
+        {
+          input: Buffer.from(
+            `<svg><rect x="0" y="0" width="110" height="110" fill="white" rx="8" ry="8"/></svg>`
+          ),
+          top: y,
+          left: x,
+          blend: "over",
+        },
+        { input: logoResized, top: y, left: x },
+      ])
+      .png()
+      .toBuffer();
 
-    // Adiciona fundo branco atrás da logo (para visual limpo)
-    const whiteBox = new Jimp(
-      logo.bitmap.width,
-      logo.bitmap.height,
-      0xffffffff
-    ); // branco puro
-    qr.composite(whiteBox, x, y);
-
-    // Aplica a logo no centro
-    qr.composite(logo, x, y, {
-      mode: Jimp.BLEND_SOURCE_OVER,
-      opacitySource: 1,
-    });
-
-    const finalBuffer = await qr.getBufferAsync("image/png");
-
+    // Envia para o Storage
     const destination = `qrcodes/${code}.png`;
-    const file = bucket.file(destination);
     const token = uuidv4();
+    const file = bucket.file(destination);
 
     await file.save(finalBuffer, {
       metadata: {
-        metadata: { firebaseStorageDownloadTokens: token },
         contentType: "image/png",
+        metadata: {
+          firebaseStorageDownloadTokens: token,
+        },
         cacheControl: "public, max-age=31536000",
       },
     });
@@ -61,11 +67,11 @@ exports.generateWithLogo = async (code) => {
     const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${
       bucket.name
     }/o/${encodeURIComponent(destination)}?alt=media&token=${token}`;
-    console.log("QR Code com logo salvo no Storage:", publicUrl);
 
+    console.log("✅ QR Code com logo salvo:", publicUrl);
     return publicUrl;
   } catch (err) {
-    console.error("Erro ao gerar QR Code com logo:", err);
+    console.error("❌ Erro com Sharp:", err);
     throw err;
   }
 };
