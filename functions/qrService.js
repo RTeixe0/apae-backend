@@ -16,28 +16,35 @@ exports.generateWithLogo = async (code) => {
 
     console.log("QR Code gerado em buffer com sucesso");
 
-    const bucket = storage().bucket("apae-eventos.firebasestorage.app"); // <-- CORRETO
-
+    const bucket = storage().bucket("apae-eventos.firebasestorage.app");
     const [logoBuffer] = await bucket.file("logos/logo_apae.png").download();
     console.log("Logo carregada do bucket, tamanho:", logoBuffer?.length);
 
-    const qr = await Jimp.read(qrBuffer); // <-- aqui
-    const logo = await Jimp.read(logoBuffer); // <-- aqui
+    const qr = await Jimp.read(qrBuffer);
+    const logo = await Jimp.read(logoBuffer);
 
-    logo.resize({
-      w: Math.floor(qr.bitmap.width * 0.2),
-      h: Jimp.AUTO,
-    });
+    // Redimensiona a logo
+    const logoWidth = Math.floor(qr.bitmap.width * 0.22);
+    logo.resize(logoWidth, Jimp.AUTO);
 
     const x = (qr.bitmap.width - logo.bitmap.width) / 2;
     const y = (qr.bitmap.height - logo.bitmap.height) / 2;
 
+    // Adiciona fundo branco atrás da logo (para visual limpo)
+    const whiteBox = new Jimp(
+      logo.bitmap.width,
+      logo.bitmap.height,
+      0xffffffff
+    ); // branco puro
+    qr.composite(whiteBox, x, y);
+
+    // Aplica a logo no centro
     qr.composite(logo, x, y, {
       mode: Jimp.BLEND_SOURCE_OVER,
       opacitySource: 1,
     });
 
-    const finalBuffer = await qr.getBuffer("image/png");
+    const finalBuffer = await qr.getBufferAsync("image/png");
 
     const destination = `qrcodes/${code}.png`;
     const file = bucket.file(destination);
