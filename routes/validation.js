@@ -1,18 +1,19 @@
-const express = require('express');
-const router = express.Router();
-const {
+import express from "express";
+import {
   validateTicket,
   scanTicket,
-  getEventReport
-} = require('../controllers/validationController');
+  getEventReport,
+} from "../controllers/validationController.js";
 
-// GET /validate/:code - Valida o ingresso
-router.get('/validate/:code', validateTicket);
+const router = express.Router();
 
-// POST /scan/:code - Marca como usado
-router.post('/scan/:code', scanTicket);
+// 🔹 Valida o ingresso
+router.get("/validate/:code", validateTicket);
 
-// GET /report/:eventId - Relatório do evento
-router.get('/report/:eventId', getEventReport);
+// 🔹 Marca ingresso como usado
+router.post("/scan/:code", scanTicket);
 
-module.exports = router;
+// 🔹 Relatório do evento
+router.get("/report/:eventId", getEventReport);
+
+export default router;

@@ -1,9 +1,9 @@
-const express = require('express');
+import express from "express";
+import { generateTicket } from "../controllers/ticketsController.js";
+
 const router = express.Router();
-const {
-  generateTicket
-} = require('../controllers/ticketsController');
 
-router.post('/', generateTicket);
+// 🔹 Gerar ticket
+router.post("/", generateTicket);
 
-module.exports = router;
+export default router;
