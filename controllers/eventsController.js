@@ -1,44 +1,47 @@
-const { db } = require('../config/firebase');
+import db from "../config/mysql.js";
 
-// POST /events
-exports.createEvent = async (req, res) => {
+// ✅ POST /events
+export const createEvent = async (req, res) => {
   try {
     const { nome, local, data, capacidade, bannerUrl } = req.body;
-    const userId = req.user.uid; // vindo do middleware de autenticação
 
-    const ref = await db.collection('events').add({
-      nome,
-      local,
-      data,
-      capacidade,
-      bannerUrl,
-      organizadorId: userId,
+    if (!nome || !local || !data) {
+      return res.status(400).json({ error: "Campos obrigatórios ausentes." });
+    }
+
+    // ID do usuário autenticado (via Cognito)
+    const userId = req.user?.id || req.user?.sub;
+
+    // 🔹 Inserir o evento no MySQL
+    const [result] = await db.query(
+      "INSERT INTO events (nome, local, data, bannerUrl, organizadorId) VALUES (?, ?, ?, ?, ?)",
+      [nome, local, data, bannerUrl || null, userId || null]
+    );
+
+    res.status(201).json({
+      id: result.insertId,
+      message: "Evento criado com sucesso!",
     });
-
-    res.status(201).json({ id: ref.id });
   } catch (err) {
-    console.error('Erro ao criar evento:', err);
-    res.status(500).json({ error: 'Erro ao criar evento' });
+    console.error("❌ Erro ao criar evento:", err);
+    res.status(500).json({ error: "Erro interno ao criar evento." });
   }
 };
 
-// GET /events
-exports.listEvents = async (req, res) => {
+// ✅ GET /events
+export const listEvents = async (req, res) => {
   try {
-    const userId = req.user.uid;
+    // ID do usuário autenticado (pode ser usado para filtrar)
+    const userId = req.user?.id || req.user?.sub;
 
-    const snapshot = await db
-      .collection('events')
-      .get();
+    // 🔹 Buscar todos os eventos (ou só do organizador, se quiser filtrar)
+    const [rows] = await db.query(
+      "SELECT id, nome, local, data, bannerUrl, organizadorId, created_at FROM events ORDER BY data DESC"
+    );
 
-    const eventos = [];
-    snapshot.forEach(doc => {
-      eventos.push({ id: doc.id, ...doc.data() });
-    });
-
-    res.status(200).json(eventos);
+    res.status(200).json(rows);
   } catch (err) {
-    console.error('Erro ao listar eventos:', err);
-    res.status(500).json({ error: 'Erro ao listar eventos' });
+    console.error("❌ Erro ao listar eventos:", err);
+    res.status(500).json({ error: "Erro interno ao listar eventos." });
   }
 };
