@@ -1,10 +1,10 @@
 import { verifier } from "../config/awsConfig.js";
 
-export const authMiddleware = async (req, res, next) => {
+export default async function authMiddleware(req, res, next) {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader) {
-      return res.status(401).json({ error: "Token ausente" });
+      return res.status(401).json({ error: "Token ausente." });
     }
 
     const token = authHeader.replace("Bearer ", "");
@@ -17,7 +17,7 @@ export const authMiddleware = async (req, res, next) => {
 
     next();
   } catch (err) {
-    console.error("Erro na verificação Cognito:", err);
-    res.status(401).json({ error: "Token inválido" });
+    console.error("❌ Erro na verificação Cognito:", err);
+    res.status(401).json({ error: "Token inválido ou expirado." });
   }
-};
+}

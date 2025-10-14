@@ -1,12 +1,14 @@
-require("dotenv").config();
-const express = require("express");
-const cors = require("cors");
+import dotenv from "dotenv";
+import express from "express";
+import cors from "cors";
 
 // 🔹 Middlewares e rotas
-const authMiddleware = require("./middlewares/authMiddleware");
-const eventsRoutes = require("./routes/events");
-const ticketsRoutes = require("./routes/tickets");
-const validationRoutes = require("./routes/validation");
+import authMiddleware from "./middlewares/authMiddleware.js";
+import eventsRoutes from "./routes/events.js";
+import ticketsRoutes from "./routes/tickets.js";
+import validationRoutes from "./routes/validation.js";
+
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;

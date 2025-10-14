@@ -9,13 +9,11 @@ export const createEvent = async (req, res) => {
       return res.status(400).json({ error: "Campos obrigatórios ausentes." });
     }
 
-    // ID do usuário autenticado (via Cognito)
     const userId = req.user?.id || req.user?.sub;
 
-    // 🔹 Inserir o evento no MySQL
     const [result] = await db.query(
-      "INSERT INTO events (nome, local, data, bannerUrl, organizadorId) VALUES (?, ?, ?, ?, ?)",
-      [nome, local, data, bannerUrl || null, userId || null]
+      "INSERT INTO events (nome, local, data, capacidade, bannerUrl, organizadorId) VALUES (?, ?, ?, ?, ?, ?)",
+      [nome, local, data, capacidade || 0, bannerUrl || null, userId || null]
     );
 
     res.status(201).json({
@@ -31,14 +29,9 @@ export const createEvent = async (req, res) => {
 // ✅ GET /events
 export const listEvents = async (req, res) => {
   try {
-    // ID do usuário autenticado (pode ser usado para filtrar)
-    const userId = req.user?.id || req.user?.sub;
-
-    // 🔹 Buscar todos os eventos (ou só do organizador, se quiser filtrar)
     const [rows] = await db.query(
-      "SELECT id, nome, local, data, bannerUrl, organizadorId, created_at FROM events ORDER BY data DESC"
+      "SELECT id, nome, local, data, capacidade, bannerUrl, organizadorId, created_at FROM events ORDER BY data DESC"
     );
-
     res.status(200).json(rows);
   } catch (err) {
     console.error("❌ Erro ao listar eventos:", err);

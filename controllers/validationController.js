@@ -1,82 +1,81 @@
-const { db } = require('../config/firebase');
+import db from "../config/mysql.js";
 
-// GET /validate/:code
-exports.validateTicket = async (req, res) => {
+// ✅ GET /validate/:code
+export const validateTicket = async (req, res) => {
   try {
     const code = req.params.code;
-    const doc = await db.collection('tickets').doc(code).get();
+    const [rows] = await db.query("SELECT * FROM tickets WHERE id = ?", [code]);
 
-    if (!doc.exists) {
-      return res.status(404).json({ valid: false, message: 'Ingresso não encontrado' });
+    if (rows.length === 0) {
+      return res
+        .status(404)
+        .json({ valid: false, message: "Ingresso não encontrado." });
     }
 
-    const data = doc.data();
-    if (data.usado) {
-      return res.status(200).json({ valid: false, message: 'Ingresso já utilizado' });
+    const ticket = rows[0];
+    if (ticket.usado) {
+      return res
+        .status(200)
+        .json({ valid: false, message: "Ingresso já utilizado." });
     }
 
-    res.status(200).json({ valid: true, ticket: data });
+    res.status(200).json({ valid: true, ticket });
   } catch (err) {
-    console.error('Erro ao validar ingresso:', err);
-    res.status(500).json({ error: 'Erro ao validar ingresso' });
+    console.error("❌ Erro ao validar ingresso:", err);
+    res.status(500).json({ error: "Erro ao validar ingresso." });
   }
 };
 
-// POST /scan/:code
-exports.scanTicket = async (req, res) => {
+// ✅ POST /scan/:code
+export const scanTicket = async (req, res) => {
   try {
     const code = req.params.code;
-    const scannerId = req.user.uid;
+    const scannerId = req.user?.id || req.user?.sub;
 
-    const ticketRef = db.collection('tickets').doc(code);
-    const doc = await ticketRef.get();
-
-    if (!doc.exists) {
-      return res.status(404).json({ success: false, message: 'Ingresso não encontrado' });
+    const [rows] = await db.query("SELECT * FROM tickets WHERE id = ?", [code]);
+    if (rows.length === 0) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Ingresso não encontrado." });
     }
 
-    const ticketData = doc.data();
-    if (ticketData.usado) {
-      return res.status(200).json({ success: false, message: 'Ingresso já foi utilizado' });
+    const ticket = rows[0];
+    if (ticket.usado) {
+      return res
+        .status(200)
+        .json({ success: false, message: "Ingresso já utilizado." });
     }
 
-    // Atualiza o ingresso como usado
-    await ticketRef.update({ usado: true });
+    await db.query("UPDATE tickets SET usado = ? WHERE id = ?", [true, code]);
+    await db.query(
+      "INSERT INTO logs (ticketId, scannerId, timestamp) VALUES (?, ?, ?)",
+      [code, scannerId, new Date()]
+    );
 
-    // Registra o log de uso
-    await db.collection('logs').add({
-      ticketId: code,
-      scannerId,
-      timestamp: new Date().toISOString(),
-    });
-
-    res.status(200).json({ success: true, message: 'Ingresso registrado com sucesso' });
+    res
+      .status(200)
+      .json({ success: true, message: "Ingresso validado com sucesso." });
   } catch (err) {
-    console.error('Erro ao registrar uso:', err);
-    res.status(500).json({ error: 'Erro ao registrar uso' });
+    console.error("❌ Erro ao registrar uso:", err);
+    res.status(500).json({ error: "Erro ao registrar uso." });
   }
 };
 
-// GET /report/:eventId
-exports.getEventReport = async (req, res) => {
+// ✅ GET /report/:eventId
+export const getEventReport = async (req, res) => {
   try {
     const eventId = req.params.eventId;
+    const [rows] = await db.query(
+      "SELECT usado FROM tickets WHERE eventId = ?",
+      [eventId]
+    );
 
-    const snapshot = await db.collection('tickets')
-      .where('eventId', '==', eventId)
-      .get();
-
-    let total = 0;
-    let usados = 0;
-
-    snapshot.forEach(doc => {
-      total++;
-      if (doc.data().usado) usados++;
-    });
+    const total = rows.length;
+    const usados = rows.filter((t) => t.usado).length;
 
     res.status(200).json({ eventId, total, usados });
   } catch (err) {
-    console.error('Erro ao gerar relatório:', err);
-    res.status(500).json({ error: 'Erro ao gerar relatório' });
+    console.error("❌ Erro ao gerar relatório:", err);
+    res.status(500).json({ error: "Erro ao gerar relatório." });
   }
 };
