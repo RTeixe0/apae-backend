@@ -1,21 +1,23 @@
-const { admin } = require('../config/firebase');
+import { verifier } from "../config/awsConfig.js";
 
-// Middleware para verificar o token JWT do Firebase
-module.exports = async (req, res, next) => {
-  const authHeader = req.headers.authorization;
-
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Token não fornecido' });
-  }
-
-  const token = authHeader.split(' ')[1];
-
+export const authMiddleware = async (req, res, next) => {
   try {
-    const decoded = await admin.auth().verifyIdToken(token);
-    req.user = decoded; // injeta os dados do usuário na requisição
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res.status(401).json({ error: "Token ausente" });
+    }
+
+    const token = authHeader.replace("Bearer ", "");
+    const payload = await verifier.verify(token);
+
+    req.user = {
+      id: payload.sub,
+      email: payload.email,
+    };
+
     next();
   } catch (err) {
-    console.error('Token inválido:', err);
-    res.status(401).json({ error: 'Token inválido' });
+    console.error("Erro na verificação Cognito:", err);
+    res.status(401).json({ error: "Token inválido" });
   }
 };
