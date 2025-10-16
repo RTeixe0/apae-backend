@@ -1,9 +1,7 @@
+import { v4 as uuidv4 } from "uuid";
 import { generateQRCodeWithLogo } from "../services/qrService.js";
 import db from "../config/mysql.js";
 
-// import { sendTicketEmail } from "../config/emailService.js"; // opcional
-
-// ✅ POST /tickets
 export const generateTicket = async (req, res) => {
   try {
     const { eventId, tipo, email } = req.body;
@@ -12,23 +10,22 @@ export const generateTicket = async (req, res) => {
       return res.status(400).json({ error: "Campos obrigatórios ausentes." });
     }
 
-    const [result] = await db.query(
-      "INSERT INTO tickets (eventId, tipo, email, usado) VALUES (?, ?, ?, ?)",
-      [eventId, tipo, email, false]
-    );
+    // 🔹 Gera código aleatório APAE-XXXXXX
+    const code = `APAE-${uuidv4().split("-")[0].toUpperCase()}`;
+    console.log(`🎟️ Gerando ticket com code: ${code}`);
 
-    const code = result.insertId.toString();
-    console.log(`🎟️ Ticket criado: ID ${code}`);
-
+    // 🔹 Gera QR Code com o código
     const qrUrl = await generateQRCodeWithLogo(code);
     console.log("✅ QR Code gerado:", qrUrl);
 
-    await db.query("UPDATE tickets SET qrUrl = ? WHERE id = ?", [qrUrl, code]);
-
-    // await sendTicketEmail(email, qrUrl, code); // opcional
+    // 🔹 Salva no banco
+    await db.query(
+      "INSERT INTO tickets (code, eventId, tipo, email, usado, qrUrl) VALUES (?, ?, ?, ?, ?, ?)",
+      [code, eventId, tipo, email, false, qrUrl]
+    );
 
     res.status(201).json({
-      id: code,
+      code,
       qrUrl,
       message: "Ticket gerado com sucesso!",
     });

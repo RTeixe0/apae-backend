@@ -3,8 +3,10 @@ import db from "../config/mysql.js";
 // ✅ GET /validate/:code
 export const validateTicket = async (req, res) => {
   try {
-    const code = req.params.code;
-    const [rows] = await db.query("SELECT * FROM tickets WHERE id = ?", [code]);
+    const { code } = req.params;
+    const [rows] = await db.query("SELECT * FROM tickets WHERE code = ?", [
+      code,
+    ]);
 
     if (rows.length === 0) {
       return res
@@ -19,7 +21,11 @@ export const validateTicket = async (req, res) => {
         .json({ valid: false, message: "Ingresso já utilizado." });
     }
 
-    res.status(200).json({ valid: true, ticket });
+    res.status(200).json({
+      valid: true,
+      message: "Ingresso válido e ainda não utilizado.",
+      ticket,
+    });
   } catch (err) {
     console.error("❌ Erro ao validar ingresso:", err);
     res.status(500).json({ error: "Erro ao validar ingresso." });
@@ -29,10 +35,12 @@ export const validateTicket = async (req, res) => {
 // ✅ POST /scan/:code
 export const scanTicket = async (req, res) => {
   try {
-    const code = req.params.code;
-    const scannerId = req.user?.id || req.user?.sub;
+    const { code } = req.params;
+    const scannerId = req.user?.sub || "desconhecido";
 
-    const [rows] = await db.query("SELECT * FROM tickets WHERE id = ?", [code]);
+    const [rows] = await db.query("SELECT * FROM tickets WHERE code = ?", [
+      code,
+    ]);
     if (rows.length === 0) {
       return res
         .status(404)
@@ -46,15 +54,15 @@ export const scanTicket = async (req, res) => {
         .json({ success: false, message: "Ingresso já utilizado." });
     }
 
-    await db.query("UPDATE tickets SET usado = ? WHERE id = ?", [true, code]);
+    await db.query("UPDATE tickets SET usado = 1 WHERE code = ?", [code]);
     await db.query(
       "INSERT INTO logs (ticketId, scannerId, timestamp) VALUES (?, ?, ?)",
-      [code, scannerId, new Date()]
+      [ticket.id, scannerId, new Date()]
     );
 
     res
       .status(200)
-      .json({ success: true, message: "Ingresso validado com sucesso." });
+      .json({ success: true, message: "Ingresso validado com sucesso!" });
   } catch (err) {
     console.error("❌ Erro ao registrar uso:", err);
     res.status(500).json({ error: "Erro ao registrar uso." });
