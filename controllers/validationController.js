@@ -1,89 +1,89 @@
-import db from "../config/mysql.js";
+  import db from "../config/mysql.js";
 
-// ✅ GET /validate/:code
-export const validateTicket = async (req, res) => {
-  try {
-    const { code } = req.params;
-    const [rows] = await db.query("SELECT * FROM tickets WHERE code = ?", [
-      code,
-    ]);
+  // ✅ GET /validate/:code
+  export const validateTicket = async (req, res) => {
+    try {
+      const { code } = req.params;
+      const [rows] = await db.query("SELECT * FROM tickets WHERE code = ?", [
+        code,
+      ]);
 
-    if (rows.length === 0) {
-      return res
-        .status(404)
-        .json({ valid: false, message: "Ingresso não encontrado." });
+      if (rows.length === 0) {
+        return res
+          .status(404)
+          .json({ valid: false, message: "Ingresso não encontrado." });
+      }
+
+      const ticket = rows[0];
+      if (ticket.usado) {
+        return res
+          .status(200)
+          .json({ valid: false, message: "Ingresso já utilizado." });
+      }
+
+      res.status(200).json({
+        valid: true,
+        message: "Ingresso válido e ainda não utilizado.",
+        ticket,
+      });
+    } catch (err) {
+      console.error("❌ Erro ao validar ingresso:", err);
+      res.status(500).json({ error: "Erro ao validar ingresso." });
     }
+  };
 
-    const ticket = rows[0];
-    if (ticket.usado) {
-      return res
+  // ✅ POST /scan/:code
+  export const scanTicket = async (req, res) => {
+    try {
+      const { code } = req.params;
+      const scannerId = req.user?.sub || "desconhecido";
+
+      const [rows] = await db.query("SELECT * FROM tickets WHERE code = ?", [
+        code,
+      ]);
+      if (rows.length === 0) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Ingresso não encontrado." });
+      }
+
+      const ticket = rows[0];
+      if (ticket.usado) {
+        return res
+          .status(200)
+          .json({ success: false, message: "Ingresso já utilizado." });
+      }
+
+      await db.query("UPDATE tickets SET usado = 1 WHERE code = ?", [code]);
+      await db.query(
+        "INSERT INTO logs (ticketId, scannerId, timestamp) VALUES (?, ?, ?)",
+        [ticket.id, scannerId, new Date()]
+      );
+
+      res
         .status(200)
-        .json({ valid: false, message: "Ingresso já utilizado." });
+        .json({ success: true, message: "Ingresso validado com sucesso!" });
+    } catch (err) {
+      console.error("❌ Erro ao registrar uso:", err);
+      res.status(500).json({ error: "Erro ao registrar uso." });
     }
+  };
 
-    res.status(200).json({
-      valid: true,
-      message: "Ingresso válido e ainda não utilizado.",
-      ticket,
-    });
-  } catch (err) {
-    console.error("❌ Erro ao validar ingresso:", err);
-    res.status(500).json({ error: "Erro ao validar ingresso." });
-  }
-};
+  // ✅ GET /report/:eventId
+  export const getEventReport = async (req, res) => {
+    try {
+      const eventId = req.params.eventId;
+      const [rows] = await db.query(
+        "SELECT usado FROM tickets WHERE eventId = ?",
+        [eventId]
+      );
 
-// ✅ POST /scan/:code
-export const scanTicket = async (req, res) => {
-  try {
-    const { code } = req.params;
-    const scannerId = req.user?.sub || "desconhecido";
+      const total = rows.length;
+      const usados = rows.filter((t) => t.usado).length;
 
-    const [rows] = await db.query("SELECT * FROM tickets WHERE code = ?", [
-      code,
-    ]);
-    if (rows.length === 0) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Ingresso não encontrado." });
+      res.status(200).json({ eventId, total, usados });
+    } catch (err) {
+      console.error("❌ Erro ao gerar relatório:", err);
+      res.status(500).json({ error: "Erro ao gerar relatório." });
     }
-
-    const ticket = rows[0];
-    if (ticket.usado) {
-      return res
-        .status(200)
-        .json({ success: false, message: "Ingresso já utilizado." });
-    }
-
-    await db.query("UPDATE tickets SET usado = 1 WHERE code = ?", [code]);
-    await db.query(
-      "INSERT INTO logs (ticketId, scannerId, timestamp) VALUES (?, ?, ?)",
-      [ticket.id, scannerId, new Date()]
-    );
-
-    res
-      .status(200)
-      .json({ success: true, message: "Ingresso validado com sucesso!" });
-  } catch (err) {
-    console.error("❌ Erro ao registrar uso:", err);
-    res.status(500).json({ error: "Erro ao registrar uso." });
-  }
-};
-
-// ✅ GET /report/:eventId
-export const getEventReport = async (req, res) => {
-  try {
-    const eventId = req.params.eventId;
-    const [rows] = await db.query(
-      "SELECT usado FROM tickets WHERE eventId = ?",
-      [eventId]
-    );
-
-    const total = rows.length;
-    const usados = rows.filter((t) => t.usado).length;
-
-    res.status(200).json({ eventId, total, usados });
-  } catch (err) {
-    console.error("❌ Erro ao gerar relatório:", err);
-    res.status(500).json({ error: "Erro ao gerar relatório." });
-  }
-};
+  };
