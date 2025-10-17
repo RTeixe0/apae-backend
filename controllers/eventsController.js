@@ -1,44 +1,40 @@
-const { db } = require('../config/firebase');
+import db from "../config/mysql.js";
 
-// POST /events
-exports.createEvent = async (req, res) => {
+// ✅ POST /events
+export const createEvent = async (req, res) => {
   try {
     const { nome, local, data, capacidade, bannerUrl } = req.body;
-    const userId = req.user.uid; // vindo do middleware de autenticação
 
-    const ref = await db.collection('events').add({
-      nome,
-      local,
-      data,
-      capacidade,
-      bannerUrl,
-      organizadorId: userId,
+    if (!nome || !local || !data) {
+      return res.status(400).json({ error: "Campos obrigatórios ausentes." });
+    }
+
+    const userId = req.user?.id || req.user?.sub;
+
+    const [result] = await db.query(
+      "INSERT INTO events (nome, local, data, capacidade, bannerUrl, organizadorId) VALUES (?, ?, ?, ?, ?, ?)",
+      [nome, local, data, capacidade || 0, bannerUrl || null, userId || null]
+    );
+
+    res.status(201).json({
+      id: result.insertId,
+      message: "Evento criado com sucesso!",
     });
-
-    res.status(201).json({ id: ref.id });
   } catch (err) {
-    console.error('Erro ao criar evento:', err);
-    res.status(500).json({ error: 'Erro ao criar evento' });
+    console.error("❌ Erro ao criar evento:", err);
+    res.status(500).json({ error: "Erro interno ao criar evento." });
   }
 };
 
-// GET /events
-exports.listEvents = async (req, res) => {
+// ✅ GET /events
+export const listEvents = async (req, res) => {
   try {
-    const userId = req.user.uid;
-
-    const snapshot = await db
-      .collection('events')
-      .get();
-
-    const eventos = [];
-    snapshot.forEach(doc => {
-      eventos.push({ id: doc.id, ...doc.data() });
-    });
-
-    res.status(200).json(eventos);
+    const [rows] = await db.query(
+      "SELECT id, nome, local, data, capacidade, bannerUrl, organizadorId, created_at FROM events ORDER BY data DESC"
+    );
+    res.status(200).json(rows);
   } catch (err) {
-    console.error('Erro ao listar eventos:', err);
-    res.status(500).json({ error: 'Erro ao listar eventos' });
+    console.error("❌ Erro ao listar eventos:", err);
+    res.status(500).json({ error: "Erro interno ao listar eventos." });
   }
 };

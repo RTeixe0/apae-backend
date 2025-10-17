@@ -1,31 +1,36 @@
-const { db } = require("../config/firebase");
-// const qrService = require('../services/qrService');
-// const emailService = require('../services/emailService');
+import { v4 as uuidv4 } from "uuid";
+import { generateQRCodeWithLogo } from "../services/qrService.js";
+import db from "../config/mysql.js";
 
-// POST /tickets
-exports.generateTicket = async (req, res) => {
+export const generateTicket = async (req, res) => {
   try {
     const { eventId, tipo, email } = req.body;
 
-    const newTicketRef = db.collection("tickets").doc();
-    const code = newTicketRef.id;
+    if (!eventId || !tipo || !email) {
+      return res.status(400).json({ error: "Campos obrigatórios ausentes." });
+    }
 
-    // Geração e envio desativados (feito via serverless)
-    // const qrUrl = await qrService.generate(code);
+    // 🔹 Gera código aleatório APAE-XXXXXX
+    const code = `APAE-${uuidv4().split("-")[0].toUpperCase()}`;
+    console.log(`🎟️ Gerando ticket com code: ${code}`);
 
-    await newTicketRef.set({
-      eventId,
-      tipo,
-      email,
-      usado: false,
-      // qrUrl,
+    // 🔹 Gera QR Code com o código
+    const qrUrl = await generateQRCodeWithLogo(code);
+    console.log("✅ QR Code gerado:", qrUrl);
+
+    // 🔹 Salva no banco
+    await db.query(
+      "INSERT INTO tickets (code, eventId, tipo, email, usado, qrUrl) VALUES (?, ?, ?, ?, ?, ?)",
+      [code, eventId, tipo, email, false, qrUrl]
+    );
+
+    res.status(201).json({
+      code,
+      qrUrl,
+      message: "Ticket gerado com sucesso!",
     });
-
-    // await emailService.sendTicketEmail(email, qrUrl, code);
-
-    res.status(201).json({ id: code /*, qrUrl */ });
   } catch (err) {
-    console.error("Erro ao gerar ticket:", err);
-    res.status(500).json({ error: "Erro ao gerar ticket" });
+    console.error("❌ Erro ao gerar ticket:", err);
+    res.status(500).json({ error: "Erro interno ao gerar ticket." });
   }
 };

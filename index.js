@@ -1,37 +1,37 @@
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
+import dotenv from "dotenv";
+import express from "express";
+import cors from "cors";
 
-const { admin, db, bucket } = require('./config/firebase');
-const authMiddleware = require('./middlewares/authMiddleware');
+// 🔹 Middlewares e rotas
+import authMiddleware from "./middlewares/authMiddleware.js";
+import eventsRoutes from "./routes/events.js";
+import ticketsRoutes from "./routes/tickets.js";
+import validationRoutes from "./routes/validation.js";
 
-const eventsRoutes = require('./routes/events');
-const ticketsRoutes = require('./routes/tickets');
-const validationRoutes = require('./routes/validation');
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middlewares
+// 🔧 Middleware base
 app.use(cors());
 app.use(express.json());
 
-// Rota de teste
-app.get('/', (req, res) => {
-  res.send('API APAE rodando com sucesso!');
-});
-app.get('/ping', (req, res) => {
-  res.send('API APAE está online 🎉');
+// ✅ Rota pública de status
+app.get("/", (req, res) => {
+  res.send("🚀 API APAE rodando com sucesso na AWS!");
 });
 
-// Rotas protegidas com middleware de autenticação
-app.use('/events', authMiddleware, eventsRoutes);
-app.use('/tickets', authMiddleware, ticketsRoutes);
-app.use('/', authMiddleware, validationRoutes);
+app.get("/ping", (req, res) => {
+  res.send("🏓 API APAE está online e saudável!");
+});
 
+// ✅ Rotas protegidas (exigem autenticação Cognito)
+app.use("/events", authMiddleware, eventsRoutes);
+app.use("/tickets", authMiddleware, ticketsRoutes);
+app.use("/", authMiddleware, validationRoutes);
 
-// Iniciar servidor
+// ✅ Inicializar servidor
 app.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
+  console.log(`✅ Servidor rodando na porta ${PORT}`);
 });
-
