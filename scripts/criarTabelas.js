@@ -13,52 +13,60 @@ async function criarTabelas() {
   // USERS
   await db.query(`
     CREATE TABLE IF NOT EXISTS users (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      nome VARCHAR(100),
-      email VARCHAR(255) UNIQUE,
-      role ENUM('admin', 'user') DEFAULT 'user',
+      id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      nome VARCHAR(100) NOT NULL,
+      email VARCHAR(255) NOT NULL UNIQUE,
+      role ENUM('admin','user') DEFAULT 'user',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
 
   // EVENTS
   await db.query(`
     CREATE TABLE IF NOT EXISTS events (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      nome VARCHAR(100),
-      local VARCHAR(255),
-      data DATE,
+      id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      nome VARCHAR(100) NOT NULL,
+      local VARCHAR(255) NOT NULL,
+      data DATE NOT NULL,
       bannerUrl TEXT,
       organizadorId INT,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
+      capacidade INT DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX (organizadorId),
+      FOREIGN KEY (organizadorId) REFERENCES users(id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
 
   // TICKETS
   await db.query(`
     CREATE TABLE IF NOT EXISTS tickets (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      eventId INT,
-      tipo VARCHAR(50),
-      email VARCHAR(255),
-      usado BOOLEAN DEFAULT FALSE,
+      id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      code VARCHAR(50) UNIQUE,
+      eventId INT NOT NULL,
+      tipo VARCHAR(50) NOT NULL,
+      email VARCHAR(255) NOT NULL,
+      usado TINYINT(1) DEFAULT 0,
       qrUrl TEXT,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX (eventId),
+      FOREIGN KEY (eventId) REFERENCES events(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
 
   // LOGS
   await db.query(`
     CREATE TABLE IF NOT EXISTS logs (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      ticketId INT,
+      id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      ticketId INT NOT NULL,
       scannerId VARCHAR(100),
-      timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
+      timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX (ticketId),
+      FOREIGN KEY (ticketId) REFERENCES tickets(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
 
-  console.log("✅ Tabelas criadas com sucesso no MySQL!");
-  process.exit(0);
+  console.log("✅ Todas as tabelas foram criadas com sucesso!");
+  await db.end();
 }
 
 criarTabelas().catch((err) => {
