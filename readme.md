@@ -83,7 +83,7 @@ aws cognito-idp initiate-auth   --auth-flow USER_PASSWORD_AUTH   --client-id 3co
 2. Teste uma rota autenticada:
 
 ```bash
-curl -H "Authorization: Bearer $TOKEN" http://54.233.7.144:3000/tickets
+curl -H "Authorization: Bearer $TOKEN" http://56.125.51.209:3000/tickets
 ```
 
 ---
