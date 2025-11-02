@@ -1,9 +1,10 @@
+// index.js
 import dotenv from "dotenv";
 import express from "express";
 import cors from "cors";
 
 // 🔹 Middlewares e rotas
-import authMiddleware from "./middlewares/authMiddleware.js";
+import { authenticate, authorize } from "./middlewares/authMiddleware.js";
 import eventsRoutes from "./routes/events.js";
 import ticketsRoutes from "./routes/tickets.js";
 import validationRoutes from "./routes/validation.js";
@@ -13,25 +14,43 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// 🔧 Middleware base
+// 🔧 Middlewares globais
 app.use(cors());
 app.use(express.json());
 
-// ✅ Rota pública de status
-app.get("/", (req, res) => {
-  res.send("🚀 API APAE rodando com sucesso na AWS!");
+// ✅ Health checks
+app.get("/", (_, res) => res.send("🚀 API APAE rodando com sucesso na AWS!"));
+app.get("/ping", (_, res) => res.send("🏓 API APAE está online e saudável!"));
+
+// ✅ Rotas principais (todas autenticadas)
+app.use("/events", authenticate, eventsRoutes);
+app.use("/tickets", authenticate, ticketsRoutes);
+app.use("/validation", authenticate, validationRoutes);
+
+// ✅ Exemplos de rotas protegidas por função/grupo
+app.get("/admin", authenticate, authorize(["admin"]), (req, res) => {
+  res.json({
+    message: `Bem-vindo administrador ${req.user.email}!`,
+    grupos: req.user.groups,
+    role: req.user.role,
+  });
 });
 
-app.get("/ping", (req, res) => {
-  res.send("🏓 API APAE está online e saudável!");
+app.get("/staff", authenticate, authorize(["staff", "admin"]), (req, res) => {
+  res.json({
+    message: `Olá ${req.user.email}, acesso de staff liberado.`,
+    grupos: req.user.groups,
+    role: req.user.role,
+  });
 });
 
-// ✅ Rotas protegidas (exigem autenticação Cognito)
-app.use("/events", authMiddleware, eventsRoutes);
-app.use("/tickets", authMiddleware, ticketsRoutes);
-app.use("/", authMiddleware, validationRoutes);
+// ✅ Fallback para rotas inexistentes
+app.use((_, res) => {
+  res.status(404).json({ error: "Rota não encontrada." });
+});
 
-// ✅ Inicializar servidor
+// ✅ Inicialização do servidor
 app.listen(PORT, () => {
   console.log(`✅ Servidor rodando na porta ${PORT}`);
+  console.log(`🌎 Acesse: http://localhost:${PORT}/`);
 });
