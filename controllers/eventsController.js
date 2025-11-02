@@ -9,6 +9,19 @@ const hasGroup = (req, groupsAllowed) => {
 };
 
 /**
+ * 🧮 Função para formatar data local (YYYY-MM-DD)
+ * Evita o problema de timezone (UTC-3 → data do dia anterior)
+ */
+const formatLocalDate = (dateString) => {
+  const d = new Date(dateString);
+  if (isNaN(d)) return null;
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+/**
  * ✅ POST /events
  * Apenas admin e staff podem criar eventos
  */
@@ -26,11 +39,9 @@ export const createEvent = async (req, res) => {
       return res.status(400).json({ error: "Campos obrigatórios ausentes." });
     }
 
-    // 🔧 Formatar data para YYYY-MM-DD
-    let formattedDate = null;
-    try {
-      formattedDate = new Date(data).toISOString().split("T")[0];
-    } catch (err) {
+    // 🔧 Formatar data corretamente no fuso local
+    const formattedDate = formatLocalDate(data);
+    if (!formattedDate) {
       return res
         .status(400)
         .json({ error: "Formato de data inválido. Use YYYY-MM-DD." });
@@ -93,7 +104,12 @@ export const updateEvent = async (req, res) => {
 
     let formattedDate = null;
     if (data) {
-      formattedDate = new Date(data).toISOString().split("T")[0];
+      formattedDate = formatLocalDate(data);
+      if (!formattedDate) {
+        return res
+          .status(400)
+          .json({ error: "Formato de data inválido. Use YYYY-MM-DD." });
+      }
     }
 
     const [result] = await db.query(
