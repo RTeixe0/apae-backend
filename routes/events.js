@@ -1,12 +1,21 @@
 import express from "express";
-import { createEvent, listEvents } from "../controllers/eventsController.js";
+import {
+  createEvent,
+  listEvents,
+  updateEvent,
+  deleteEvent,
+} from "../controllers/eventsController.js";
 
 const router = express.Router();
 
-// 🔹 Criar novo evento
+// 🔹 Todos autenticados podem ver
+router.get("/", listEvents);
+
+// 🔹 Staff e Admin podem criar
 router.post("/", createEvent);
 
-// 🔹 Listar eventos
-router.get("/", listEvents);
+// 🔹 Admin pode editar e deletar
+router.put("/:id", updateEvent);
+router.delete("/:id", deleteEvent);
 
 export default router;
