@@ -2,35 +2,89 @@ import { v4 as uuidv4 } from "uuid";
 import { generateQRCodeWithLogo } from "../services/qrService.js";
 import db from "../config/mysql.js";
 
+/**
+ * 🎟️ Cria um novo ticket (compra do usuário)
+ */
 export const generateTicket = async (req, res) => {
+  const connection = await db.getConnection();
   try {
-    const { eventId, tipo, email } = req.body;
+    const { eventId } = req.body;
+    const userId = req.user?.id || req.user?.sub;
 
-    if (!eventId || !tipo || !email) {
-      return res.status(400).json({ error: "Campos obrigatórios ausentes." });
+    if (!eventId) {
+      return res.status(400).json({ error: "O campo eventId é obrigatório." });
     }
 
-    // 🔹 Gera código aleatório APAE-XXXXXX
+    const [eventRows] = await connection.query(
+      "SELECT id, nome, capacity, sold_count, ticket_price FROM events WHERE id = ?",
+      [eventId]
+    );
+    if (eventRows.length === 0)
+      return res.status(404).json({ error: "Evento não encontrado." });
+
+    const event = eventRows[0];
+    if (event.sold_count >= event.capacity)
+      return res
+        .status(400)
+        .json({ error: "Capacidade esgotada para este evento." });
+
     const code = `APAE-${uuidv4().split("-")[0].toUpperCase()}`;
-    console.log(`🎟️ Gerando ticket com code: ${code}`);
-
-    // 🔹 Gera QR Code com o código
     const qrUrl = await generateQRCodeWithLogo(code);
-    console.log("✅ QR Code gerado:", qrUrl);
+    const pricePaid = event.ticket_price;
 
-    // 🔹 Salva no banco
-    await db.query(
-      "INSERT INTO tickets (code, eventId, tipo, email, usado, qrUrl) VALUES (?, ?, ?, ?, ?, ?)",
-      [code, eventId, tipo, email, false, qrUrl]
+    await connection.beginTransaction();
+
+    const [insertResult] = await connection.query(
+      `INSERT INTO tickets 
+        (code, event_id, user_id, payment_id, price_paid, status, qr_url)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [code, eventId, userId, null, pricePaid, "issued", qrUrl]
     );
 
+    await connection.query(
+      "UPDATE events SET sold_count = sold_count + 1 WHERE id = ?",
+      [eventId]
+    );
+
+    await connection.commit();
+
     res.status(201).json({
+      id: insertResult.insertId,
       code,
       qrUrl,
-      message: "Ticket gerado com sucesso!",
+      pricePaid,
+      message: "🎟️ Ticket gerado com sucesso!",
     });
   } catch (err) {
     console.error("❌ Erro ao gerar ticket:", err);
+    await db.query("ROLLBACK");
     res.status(500).json({ error: "Erro interno ao gerar ticket." });
+  } finally {
+    connection.release();
+  }
+};
+
+/**
+ * 📋 Lista todos os tickets do usuário logado
+ */
+export const listUserTickets = async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?.sub;
+
+    const [rows] = await db.query(
+      `SELECT 
+         t.id, t.code, t.qr_url, t.status, t.price_paid, t.validated_at,
+         e.nome AS event_name, e.data AS event_date, e.local AS event_location
+       FROM tickets t
+       JOIN events e ON e.id = t.event_id
+       WHERE t.user_id = ?
+       ORDER BY e.data DESC`,
+      [userId]
+    );
+
+    res.status(200).json(rows);
+  } catch (err) {
+    console.error("❌ Erro ao listar tickets:", err);
+    res.status(500).json({ error: "Erro interno ao listar tickets." });
   }
 };

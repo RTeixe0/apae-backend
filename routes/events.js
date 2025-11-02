@@ -5,17 +5,18 @@ import {
   updateEvent,
   deleteEvent,
 } from "../controllers/eventsController.js";
+import { authenticate } from "../middlewares/authMiddleware.js"; // 🔒 se já estiver configurado Cognito
 
 const router = express.Router();
 
-// 🔹 Todos autenticados podem ver
-router.get("/", listEvents);
+// 🔹 Todos autenticados podem listar eventos
+router.get("/", authenticate, listEvents);
 
 // 🔹 Staff e Admin podem criar
-router.post("/", createEvent);
+router.post("/", authenticate, createEvent);
 
 // 🔹 Admin pode editar e deletar
-router.put("/:id", updateEvent);
-router.delete("/:id", deleteEvent);
+router.put("/:id", authenticate, updateEvent);
+router.delete("/:id", authenticate, deleteEvent);
 
 export default router;

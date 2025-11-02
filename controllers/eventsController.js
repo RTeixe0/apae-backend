@@ -10,7 +10,6 @@ const hasGroup = (req, groupsAllowed) => {
 
 /**
  * 🧮 Função para formatar data local (YYYY-MM-DD)
- * Evita o problema de timezone (UTC-3 → data do dia anterior)
  */
 const formatLocalDate = (dateString) => {
   const d = new Date(dateString);
@@ -33,13 +32,21 @@ export const createEvent = async (req, res) => {
       });
     }
 
-    const { nome, local, data, capacidade, bannerUrl } = req.body;
+    const {
+      nome,
+      local,
+      data,
+      starts_at,
+      ends_at,
+      capacidade,
+      bannerUrl,
+      ticket_price,
+    } = req.body;
 
     if (!nome || !local || !data) {
       return res.status(400).json({ error: "Campos obrigatórios ausentes." });
     }
 
-    // 🔧 Formatar data corretamente no fuso local
     const formattedDate = formatLocalDate(data);
     if (!formattedDate) {
       return res
@@ -50,13 +57,20 @@ export const createEvent = async (req, res) => {
     const userId = req.user?.id || req.user?.sub;
 
     const [result] = await db.query(
-      "INSERT INTO events (nome, local, data, capacidade, bannerUrl, organizadorId) VALUES (?, ?, ?, ?, ?, ?)",
+      `INSERT INTO events 
+        (nome, local, data, starts_at, ends_at, banner_url, capacity, sold_count, ticket_price, status, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         nome,
         local,
         formattedDate,
-        capacidade || 0,
+        starts_at || null,
+        ends_at || null,
         bannerUrl || null,
+        capacidade || 0,
+        0, // sold_count inicial
+        ticket_price || 0.0,
+        "published",
         userId || null,
       ]
     );
@@ -73,13 +87,21 @@ export const createEvent = async (req, res) => {
 
 /**
  * ✅ GET /events
- * Todos os usuários autenticados podem ver eventos
+ * Todos os usuários autenticados podem visualizar
  */
 export const listEvents = async (_req, res) => {
   try {
     const [rows] = await db.query(
-      "SELECT id, nome, local, data, capacidade, bannerUrl, organizadorId, created_at FROM events ORDER BY data DESC"
+      `SELECT 
+         e.id, e.nome, e.local, e.data, e.starts_at, e.ends_at,
+         e.banner_url, e.capacity, e.sold_count, e.ticket_price,
+         e.status, e.created_at,
+         u.name AS created_by_name
+       FROM events e
+       LEFT JOIN users u ON u.id = e.created_by
+       ORDER BY e.data DESC`
     );
+
     res.status(200).json(rows);
   } catch (err) {
     console.error("❌ Erro ao listar eventos:", err);
@@ -100,21 +122,37 @@ export const updateEvent = async (req, res) => {
     }
 
     const { id } = req.params;
-    const { nome, local, data, capacidade, bannerUrl } = req.body;
+    const {
+      nome,
+      local,
+      data,
+      starts_at,
+      ends_at,
+      capacidade,
+      bannerUrl,
+      ticket_price,
+      status,
+    } = req.body;
 
-    let formattedDate = null;
-    if (data) {
-      formattedDate = formatLocalDate(data);
-      if (!formattedDate) {
-        return res
-          .status(400)
-          .json({ error: "Formato de data inválido. Use YYYY-MM-DD." });
-      }
-    }
+    const formattedDate = data ? formatLocalDate(data) : null;
 
     const [result] = await db.query(
-      "UPDATE events SET nome=?, local=?, data=?, capacidade=?, bannerUrl=? WHERE id=?",
-      [nome, local, formattedDate, capacidade, bannerUrl, id]
+      `UPDATE events 
+       SET nome=?, local=?, data=?, starts_at=?, ends_at=?, 
+           capacity=?, banner_url=?, ticket_price=?, status=?
+       WHERE id=?`,
+      [
+        nome,
+        local,
+        formattedDate,
+        starts_at || null,
+        ends_at || null,
+        capacidade,
+        bannerUrl || null,
+        ticket_price || 0,
+        status || "published",
+        id,
+      ]
     );
 
     if (result.affectedRows === 0) {
