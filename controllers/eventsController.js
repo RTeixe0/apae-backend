@@ -1,7 +1,7 @@
 import db from "../config/mysql.js";
 
 /**
- * 🔐 Função auxiliar: verifica se o usuário pertence a algum grupo permitido
+ * 🔐 Verifica se o usuário pertence a algum grupo permitido
  */
 const hasGroup = (req, groupsAllowed) => {
   const userGroups = req.user?.groups || [];
@@ -9,11 +9,12 @@ const hasGroup = (req, groupsAllowed) => {
 };
 
 /**
- * 🧮 Função para formatar data local (YYYY-MM-DD)
+ * 🧮 Formata data local no padrão YYYY-MM-DD
  */
 const formatLocalDate = (dateString) => {
+  if (!dateString) return null;
   const d = new Date(dateString);
-  if (isNaN(d)) return null;
+  if (isNaN(d.getTime())) return null;
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
@@ -22,7 +23,7 @@ const formatLocalDate = (dateString) => {
 
 /**
  * ✅ POST /events
- * Apenas admin e staff podem criar eventos
+ * Admin e staff podem criar novos eventos
  */
 export const createEvent = async (req, res) => {
   try {
@@ -38,9 +39,10 @@ export const createEvent = async (req, res) => {
       data,
       starts_at,
       ends_at,
-      capacidade,
+      capacity,
       bannerUrl,
       ticket_price,
+      status,
     } = req.body;
 
     if (!nome || !local || !data) {
@@ -49,9 +51,9 @@ export const createEvent = async (req, res) => {
 
     const formattedDate = formatLocalDate(data);
     if (!formattedDate) {
-      return res
-        .status(400)
-        .json({ error: "Formato de data inválido. Use YYYY-MM-DD." });
+      return res.status(400).json({
+        error: "Formato de data inválido. Use YYYY-MM-DD.",
+      });
     }
 
     const userId = req.user?.id || req.user?.sub;
@@ -67,10 +69,10 @@ export const createEvent = async (req, res) => {
         starts_at || null,
         ends_at || null,
         bannerUrl || null,
-        capacidade || 0,
+        capacity || 0,
         0, // sold_count inicial
         ticket_price || 0.0,
-        "published",
+        status || "published",
         userId || null,
       ]
     );
@@ -94,7 +96,7 @@ export const listEvents = async (_req, res) => {
     const [rows] = await db.query(
       `SELECT 
          e.id, e.nome, e.local, e.data, e.starts_at, e.ends_at,
-         e.banner_url, e.capacity, e.sold_count, e.ticket_price,
+         e.banner_url AS bannerUrl, e.capacity, e.sold_count, e.ticket_price,
          e.status, e.created_at,
          u.name AS created_by_name
        FROM events e
@@ -128,26 +130,42 @@ export const updateEvent = async (req, res) => {
       data,
       starts_at,
       ends_at,
-      capacidade,
+      capacity,
       bannerUrl,
       ticket_price,
       status,
     } = req.body;
 
+    // Formata data (se fornecida)
     const formattedDate = data ? formatLocalDate(data) : null;
 
+    // Verifica se o evento existe
+    const [exists] = await db.query("SELECT id FROM events WHERE id = ?", [id]);
+    if (exists.length === 0) {
+      return res.status(404).json({ error: "Evento não encontrado." });
+    }
+
+    // Atualiza com segurança
     const [result] = await db.query(
       `UPDATE events 
-       SET nome=?, local=?, data=?, starts_at=?, ends_at=?, 
-           capacity=?, banner_url=?, ticket_price=?, status=?
-       WHERE id=?`,
+       SET nome = COALESCE(?, nome),
+           local = COALESCE(?, local),
+           data = COALESCE(?, data),
+           starts_at = COALESCE(?, starts_at),
+           ends_at = COALESCE(?, ends_at),
+           capacity = COALESCE(?, capacity),
+           banner_url = COALESCE(?, banner_url),
+           ticket_price = COALESCE(?, ticket_price),
+           status = COALESCE(?, status),
+           updated_at = NOW()
+       WHERE id = ?`,
       [
-        nome,
-        local,
-        formattedDate,
+        nome || null,
+        local || null,
+        formattedDate || null,
         starts_at || null,
         ends_at || null,
-        capacidade,
+        capacity || 0,
         bannerUrl || null,
         ticket_price || 0,
         status || "published",
