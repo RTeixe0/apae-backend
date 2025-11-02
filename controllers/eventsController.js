@@ -1,22 +1,23 @@
 import db from "../config/mysql.js";
 
 /**
- * 🔐 Função auxiliar: verifica se o usuário pertence a algum grupo
+ * 🔐 Função auxiliar: verifica se o usuário pertence a algum grupo permitido
  */
 const hasGroup = (req, groupsAllowed) => {
   const userGroups = req.user?.groups || [];
   return groupsAllowed.some((g) => userGroups.includes(g));
 };
 
-// ✅ POST /events - admin e staff
+/**
+ * ✅ POST /events
+ * Apenas admin e staff podem criar eventos
+ */
 export const createEvent = async (req, res) => {
   try {
     if (!hasGroup(req, ["admin", "staff"])) {
-      return res
-        .status(403)
-        .json({
-          error: "Acesso negado. Apenas admin ou staff podem criar eventos.",
-        });
+      return res.status(403).json({
+        error: "Acesso negado. Apenas admin ou staff podem criar eventos.",
+      });
     }
 
     const { nome, local, data, capacidade, bannerUrl } = req.body;
@@ -25,11 +26,28 @@ export const createEvent = async (req, res) => {
       return res.status(400).json({ error: "Campos obrigatórios ausentes." });
     }
 
+    // 🔧 Formatar data para YYYY-MM-DD
+    let formattedDate = null;
+    try {
+      formattedDate = new Date(data).toISOString().split("T")[0];
+    } catch (err) {
+      return res
+        .status(400)
+        .json({ error: "Formato de data inválido. Use YYYY-MM-DD." });
+    }
+
     const userId = req.user?.id || req.user?.sub;
 
     const [result] = await db.query(
       "INSERT INTO events (nome, local, data, capacidade, bannerUrl, organizadorId) VALUES (?, ?, ?, ?, ?, ?)",
-      [nome, local, data, capacidade || 0, bannerUrl || null, userId || null]
+      [
+        nome,
+        local,
+        formattedDate,
+        capacidade || 0,
+        bannerUrl || null,
+        userId || null,
+      ]
     );
 
     res.status(201).json({
@@ -42,8 +60,11 @@ export const createEvent = async (req, res) => {
   }
 };
 
-// ✅ GET /events - todos podem ver
-export const listEvents = async (req, res) => {
+/**
+ * ✅ GET /events
+ * Todos os usuários autenticados podem ver eventos
+ */
+export const listEvents = async (_req, res) => {
   try {
     const [rows] = await db.query(
       "SELECT id, nome, local, data, capacidade, bannerUrl, organizadorId, created_at FROM events ORDER BY data DESC"
@@ -55,23 +76,29 @@ export const listEvents = async (req, res) => {
   }
 };
 
-// ✅ PUT /events/:id - apenas admin
+/**
+ * ✅ PUT /events/:id
+ * Apenas admin pode editar eventos
+ */
 export const updateEvent = async (req, res) => {
   try {
     if (!hasGroup(req, ["admin"])) {
-      return res
-        .status(403)
-        .json({
-          error: "Acesso negado. Apenas administradores podem editar eventos.",
-        });
+      return res.status(403).json({
+        error: "Acesso negado. Apenas administradores podem editar eventos.",
+      });
     }
 
     const { id } = req.params;
     const { nome, local, data, capacidade, bannerUrl } = req.body;
 
+    let formattedDate = null;
+    if (data) {
+      formattedDate = new Date(data).toISOString().split("T")[0];
+    }
+
     const [result] = await db.query(
       "UPDATE events SET nome=?, local=?, data=?, capacidade=?, bannerUrl=? WHERE id=?",
-      [nome, local, data, capacidade, bannerUrl, id]
+      [nome, local, formattedDate, capacidade, bannerUrl, id]
     );
 
     if (result.affectedRows === 0) {
@@ -85,19 +112,19 @@ export const updateEvent = async (req, res) => {
   }
 };
 
-// ✅ DELETE /events/:id - apenas admin
+/**
+ * ✅ DELETE /events/:id
+ * Apenas admin pode excluir eventos
+ */
 export const deleteEvent = async (req, res) => {
   try {
     if (!hasGroup(req, ["admin"])) {
-      return res
-        .status(403)
-        .json({
-          error: "Acesso negado. Apenas administradores podem excluir eventos.",
-        });
+      return res.status(403).json({
+        error: "Acesso negado. Apenas administradores podem excluir eventos.",
+      });
     }
 
     const { id } = req.params;
-
     const [result] = await db.query("DELETE FROM events WHERE id = ?", [id]);
 
     if (result.affectedRows === 0) {
