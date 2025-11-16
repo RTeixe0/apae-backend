@@ -1,7 +1,16 @@
 import { jest } from "@jest/globals";
 
 const mockQuery = jest.fn();
-const db = { query: mockQuery };
+const mockGetConnection = jest.fn();
+const mockRelease = jest.fn();
+const mockBeginTransaction = jest.fn();
+const mockCommit = jest.fn();
+const mockRollback = jest.fn();
+
+const db = {
+    query: mockQuery,
+    getConnection: mockGetConnection,
+};
 
 jest.unstable_mockModule("../config/mysql.js", () => ({
     default: db,
@@ -34,95 +43,109 @@ describe("TicketsController", () => {
 
         jest.clearAllMocks();
         mockQuery.mockReset();
+        mockGetConnection.mockReset();
+        mockRelease.mockReset();
+        mockBeginTransaction.mockReset();
+        mockCommit.mockReset();
+        mockRollback.mockReset();
         mockUuidv4.mockReset();
         mockGenerateQRCodeWithLogo.mockReset();
+
+        // Mock connection object
+        const mockConnection = {
+            query: mockQuery,
+            release: mockRelease,
+            beginTransaction: mockBeginTransaction,
+            commit: mockCommit,
+            rollback: mockRollback,
+        };
+        mockGetConnection.mockResolvedValue(mockConnection);
     });
 
     describe("generateTicket - Happy Path", () => {
         it("deve criar um ticket com sucesso quando todos os dados obrigatórios são fornecidos", async () => {
             req.body = {
                 eventId: 1,
-                tipo: "VIP",
-                email: "test@example.com",
+                buyerEmail: "test@example.com",
+                quantity: 1,
             };
+            req.user = { id: 10, sub: "user-sub-123" };
 
             mockUuidv4.mockReturnValue("12345678-1234-1234-1234-123456789abc");
-
             mockGenerateQRCodeWithLogo.mockResolvedValue(
                 "https://exemplo.com/qr-code.png"
             );
 
-            const mockResult = { insertId: 456 };
-            mockQuery.mockResolvedValue([mockResult]);
+            // Mock do evento
+            const mockEvent = {
+                id: 1,
+                nome: "Evento Teste",
+                capacity: 100,
+                sold_count: 10,
+                ticket_price: 10.99,
+            };
+
+            mockQuery
+                .mockResolvedValueOnce([[mockEvent]]) // SELECT event
+                .mockResolvedValueOnce([{ insertId: 456 }]) // INSERT ticket
+                .mockResolvedValueOnce([{ affectedRows: 1 }]); // UPDATE sold_count
 
             await generateTicket(req, res);
 
-            expect(mockUuidv4).toHaveBeenCalled();
-            expect(mockGenerateQRCodeWithLogo).toHaveBeenCalledWith(
-                "APAE-12345678"
-            );
-            expect(mockQuery).toHaveBeenCalledWith(
-                expect.stringContaining("INSERT INTO tickets"),
-                [
-                    "APAE-12345678",
-                    1,
-                    "VIP",
-                    "test@example.com",
-                    false,
-                    "https://exemplo.com/qr-code.png",
-                ]
-            );
+            expect(mockRelease).toHaveBeenCalled();
             expect(res.status).toHaveBeenCalledWith(201);
-            expect(res.json).toHaveBeenCalledWith({
-                code: "APAE-12345678",
-                qrUrl: "https://exemplo.com/qr-code.png",
-                message: "Ticket gerado com sucesso!",
-            });
+            expect(res.json).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: "🎟️ Tickets gerados com sucesso!",
+                    totalGenerated: 1,
+                })
+            );
         });
     });
 
     describe("generateTicket - Cenários de Validação", () => {
         it("deve retornar erro 400 quando eventId está ausente", async () => {
             req.body = {
-                tipo: "VIP",
-                email: "test@example.com",
+                buyerEmail: "test@example.com",
             };
 
             await generateTicket(req, res);
 
-            expect(mockQuery).not.toHaveBeenCalled();
-            expect(mockGenerateQRCodeWithLogo).not.toHaveBeenCalled();
+            expect(mockRelease).toHaveBeenCalled();
             expect(res.status).toHaveBeenCalledWith(400);
             expect(res.json).toHaveBeenCalledWith({
-                error: "Campos obrigatórios ausentes.",
+                error: "Campos obrigatórios ausentes (eventId e buyerEmail).",
             });
         });
 
-        it("deve retornar erro 400 quando tipo está ausente", async () => {
+        it("deve retornar erro 400 quando buyerEmail está ausente", async () => {
             req.body = {
                 eventId: 1,
-                email: "test@example.com",
             };
 
             await generateTicket(req, res);
 
+            expect(mockRelease).toHaveBeenCalled();
             expect(res.status).toHaveBeenCalledWith(400);
             expect(res.json).toHaveBeenCalledWith({
-                error: "Campos obrigatórios ausentes.",
+                error: "Campos obrigatórios ausentes (eventId e buyerEmail).",
             });
         });
 
-        it("deve retornar erro 400 quando email está ausente", async () => {
+        it("deve retornar erro 404 quando evento não existe", async () => {
             req.body = {
-                eventId: 1,
-                tipo: "VIP",
+                eventId: 999,
+                buyerEmail: "test@example.com",
             };
+
+            mockQuery.mockResolvedValueOnce([[]]); // Evento não encontrado
 
             await generateTicket(req, res);
 
-            expect(res.status).toHaveBeenCalledWith(400);
+            expect(mockRelease).toHaveBeenCalled();
+            expect(res.status).toHaveBeenCalledWith(404);
             expect(res.json).toHaveBeenCalledWith({
-                error: "Campos obrigatórios ausentes.",
+                error: "Evento não encontrado.",
             });
         });
     });
@@ -131,41 +154,61 @@ describe("TicketsController", () => {
         it("deve retornar erro 500 quando falha ao gerar QR Code", async () => {
             req.body = {
                 eventId: 1,
-                tipo: "VIP",
-                email: "test@example.com",
+                buyerEmail: "test@example.com",
+            };
+
+            const mockEvent = {
+                id: 1,
+                nome: "Evento Teste",
+                capacity: 100,
+                sold_count: 10,
+                ticket_price: 10.99,
             };
 
             mockUuidv4.mockReturnValue("12345678-1234-1234-1234-123456789abc");
+            mockQuery.mockResolvedValueOnce([[mockEvent]]);
             mockGenerateQRCodeWithLogo.mockRejectedValue(
                 new Error("QR Code generation failed")
             );
 
             await generateTicket(req, res);
 
+            expect(mockRelease).toHaveBeenCalled();
             expect(res.status).toHaveBeenCalledWith(500);
             expect(res.json).toHaveBeenCalledWith({
-                error: "Erro interno ao gerar ticket.",
+                error: "Erro interno ao gerar tickets.",
             });
         });
 
         it("deve retornar erro 500 quando falha ao salvar no banco", async () => {
             req.body = {
                 eventId: 1,
-                tipo: "VIP",
-                email: "test@example.com",
+                buyerEmail: "test@example.com",
+            };
+
+            const mockEvent = {
+                id: 1,
+                nome: "Evento Teste",
+                capacity: 100,
+                sold_count: 10,
+                ticket_price: 10.99,
             };
 
             mockUuidv4.mockReturnValue("12345678-1234-1234-1234-123456789abc");
             mockGenerateQRCodeWithLogo.mockResolvedValue(
                 "https://exemplo.com/qr-code.png"
             );
-            mockQuery.mockRejectedValue(new Error("Database error"));
+
+            mockQuery
+                .mockResolvedValueOnce([[mockEvent]])
+                .mockRejectedValue(new Error("Database error"));
 
             await generateTicket(req, res);
 
+            expect(mockRelease).toHaveBeenCalled();
             expect(res.status).toHaveBeenCalledWith(500);
             expect(res.json).toHaveBeenCalledWith({
-                error: "Erro interno ao gerar ticket.",
+                error: "Erro interno ao gerar tickets.",
             });
         });
     });

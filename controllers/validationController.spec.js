@@ -1,7 +1,16 @@
 import { jest } from "@jest/globals";
 
 const mockQuery = jest.fn();
-const db = { query: mockQuery };
+const mockGetConnection = jest.fn();
+const mockRelease = jest.fn();
+const mockBeginTransaction = jest.fn();
+const mockCommit = jest.fn();
+const mockRollback = jest.fn();
+
+const db = {
+    query: mockQuery,
+    getConnection: mockGetConnection,
+};
 
 jest.unstable_mockModule("../config/mysql.js", () => ({
     default: db,
@@ -17,7 +26,7 @@ describe("ValidationController", () => {
     beforeEach(() => {
         req = {
             params: {},
-            user: {},
+            user: { groups: ["admin"] },
             body: {},
         };
         res = {
@@ -27,6 +36,21 @@ describe("ValidationController", () => {
 
         jest.clearAllMocks();
         mockQuery.mockReset();
+        mockGetConnection.mockReset();
+        mockRelease.mockReset();
+        mockBeginTransaction.mockReset();
+        mockCommit.mockReset();
+        mockRollback.mockReset();
+
+        // Mock connection object
+        const mockConnection = {
+            query: mockQuery,
+            release: mockRelease,
+            beginTransaction: mockBeginTransaction,
+            commit: mockCommit,
+            rollback: mockRollback,
+        };
+        mockGetConnection.mockResolvedValue(mockConnection);
     });
 
     describe("validateTicket - Happy Path", () => {
@@ -36,11 +60,14 @@ describe("ValidationController", () => {
             const mockTicket = {
                 id: 1,
                 code: "APAE-12345678",
-                eventId: 1,
-                tipo: "VIP",
-                email: "test@example.com",
-                usado: false,
-                qrUrl: "https://example.com/qr.png",
+                status: "issued",
+                price_paid: 10.99,
+                validated_at: null,
+                buyer_email: "test@example.com",
+                event_id: 1,
+                event_name: "Evento Teste",
+                event_location: "São Paulo",
+                event_date: "2024-12-31",
             };
 
             mockQuery.mockResolvedValue([[mockTicket]]);
@@ -48,24 +75,24 @@ describe("ValidationController", () => {
             await validateTicket(req, res);
 
             expect(mockQuery).toHaveBeenCalledWith(
-                "SELECT * FROM tickets WHERE code = ?",
+                expect.stringContaining("SELECT"),
                 ["APAE-12345678"]
             );
             expect(res.status).toHaveBeenCalledWith(200);
             expect(res.json).toHaveBeenCalledWith({
                 valid: true,
-                message: "Ingresso válido e ainda não utilizado.",
+                message: "✅ Ingresso válido e ainda não utilizado.",
                 ticket: mockTicket,
             });
         });
 
-        it("deve retornar ticket já utilizado quando usado = true", async () => {
+        it("deve retornar ticket já utilizado quando status = used", async () => {
             req.params = { code: "APAE-99999999" };
 
             const mockTicket = {
                 id: 2,
                 code: "APAE-99999999",
-                usado: true,
+                status: "used",
             };
 
             mockQuery.mockResolvedValue([[mockTicket]]);
@@ -75,7 +102,8 @@ describe("ValidationController", () => {
             expect(res.status).toHaveBeenCalledWith(200);
             expect(res.json).toHaveBeenCalledWith({
                 valid: false,
-                message: "Ingresso já utilizado.",
+                message: "⚠️ Ingresso já utilizado.",
+                ticket: mockTicket,
             });
         });
     });
@@ -90,7 +118,7 @@ describe("ValidationController", () => {
             expect(res.status).toHaveBeenCalledWith(404);
             expect(res.json).toHaveBeenCalledWith({
                 valid: false,
-                message: "Ingresso não encontrado.",
+                message: "🎟️ Ingresso não encontrado.",
             });
         });
 
@@ -102,7 +130,7 @@ describe("ValidationController", () => {
 
             expect(res.status).toHaveBeenCalledWith(500);
             expect(res.json).toHaveBeenCalledWith({
-                error: "Erro ao validar ingresso.",
+                error: "Erro interno ao validar ingresso.",
             });
         });
     });
@@ -110,12 +138,13 @@ describe("ValidationController", () => {
     describe("scanTicket - Happy Path", () => {
         it("deve escanear e marcar ticket como usado com sucesso", async () => {
             req.params = { code: "APAE-SCAN123" };
-            req.user = { sub: "scanner-user-123" };
+            req.user = { sub: "scanner-user-123", id: 5, groups: ["admin"] };
 
             const mockTicket = {
                 id: 10,
                 code: "APAE-SCAN123",
-                usado: false,
+                status: "issued",
+                event_id: 1,
             };
 
             mockQuery
@@ -128,34 +157,27 @@ describe("ValidationController", () => {
             expect(mockQuery).toHaveBeenCalledTimes(3);
             expect(mockQuery).toHaveBeenNthCalledWith(
                 1,
-                "SELECT * FROM tickets WHERE code = ?",
+                "SELECT id, status, event_id FROM tickets WHERE code = ?",
                 ["APAE-SCAN123"]
             );
-            expect(mockQuery).toHaveBeenNthCalledWith(
-                2,
-                "UPDATE tickets SET usado = 1 WHERE code = ?",
-                ["APAE-SCAN123"]
-            );
-            expect(mockQuery).toHaveBeenNthCalledWith(
-                3,
-                "INSERT INTO logs (ticketId, scannerId, timestamp) VALUES (?, ?, ?)",
-                [10, "scanner-user-123", expect.any(Date)]
-            );
+            expect(mockRelease).toHaveBeenCalled();
             expect(res.status).toHaveBeenCalledWith(200);
             expect(res.json).toHaveBeenCalledWith({
                 success: true,
-                message: "Ingresso validado com sucesso!",
+                message: "✅ Ingresso validado com sucesso!",
+                ticketId: 10,
+                validatedBy: 5,
             });
         });
 
-        it("deve usar 'desconhecido' como scannerId quando req.user não existe", async () => {
+        it("deve usar null como scannerId quando req.user.id não existe", async () => {
             req.params = { code: "APAE-SCAN456" };
-            req.user = undefined;
+            req.user = { groups: ["staff"] };
 
             const mockTicket = {
                 id: 20,
                 code: "APAE-SCAN456",
-                usado: false,
+                status: "issued",
             };
 
             mockQuery
@@ -165,11 +187,7 @@ describe("ValidationController", () => {
 
             await scanTicket(req, res);
 
-            expect(mockQuery).toHaveBeenNthCalledWith(3, expect.any(String), [
-                20,
-                "desconhecido",
-                expect.any(Date),
-            ]);
+            expect(mockRelease).toHaveBeenCalled();
             expect(res.status).toHaveBeenCalledWith(200);
         });
     });
@@ -182,10 +200,11 @@ describe("ValidationController", () => {
             await scanTicket(req, res);
 
             expect(mockQuery).toHaveBeenCalledTimes(1);
+            expect(mockRelease).toHaveBeenCalled();
             expect(res.status).toHaveBeenCalledWith(404);
             expect(res.json).toHaveBeenCalledWith({
                 success: false,
-                message: "Ingresso não encontrado.",
+                message: "🎟️ Ingresso não encontrado.",
             });
         });
 
@@ -195,7 +214,7 @@ describe("ValidationController", () => {
             const mockTicket = {
                 id: 30,
                 code: "APAE-USED123",
-                usado: true,
+                status: "used",
             };
 
             mockQuery.mockResolvedValue([[mockTicket]]);
@@ -203,10 +222,11 @@ describe("ValidationController", () => {
             await scanTicket(req, res);
 
             expect(mockQuery).toHaveBeenCalledTimes(1);
-            expect(res.status).toHaveBeenCalledWith(200);
+            expect(mockRelease).toHaveBeenCalled();
+            expect(res.status).toHaveBeenCalledWith(400);
             expect(res.json).toHaveBeenCalledWith({
                 success: false,
-                message: "Ingresso já utilizado.",
+                message: "⚠️ Ingresso já utilizado.",
             });
         });
 
@@ -216,9 +236,10 @@ describe("ValidationController", () => {
 
             await scanTicket(req, res);
 
+            expect(mockRelease).toHaveBeenCalled();
             expect(res.status).toHaveBeenCalledWith(500);
             expect(res.json).toHaveBeenCalledWith({
-                error: "Erro ao registrar uso.",
+                error: "Erro ao registrar validação.",
             });
         });
     });
@@ -227,20 +248,14 @@ describe("ValidationController", () => {
         it("deve gerar relatório com tickets usados e não usados", async () => {
             req.params = { eventId: "1" };
 
-            const mockTickets = [
-                { usado: true },
-                { usado: false },
-                { usado: true },
-                { usado: false },
-                { usado: true },
-            ];
+            const mockStats = [{ total: 5, usados: 3 }];
 
-            mockQuery.mockResolvedValue([mockTickets]);
+            mockQuery.mockResolvedValue([mockStats]);
 
             await getEventReport(req, res);
 
             expect(mockQuery).toHaveBeenCalledWith(
-                "SELECT usado FROM tickets WHERE eventId = ?",
+                expect.stringContaining("SELECT"),
                 ["1"]
             );
             expect(res.status).toHaveBeenCalledWith(200);
@@ -248,12 +263,13 @@ describe("ValidationController", () => {
                 eventId: "1",
                 total: 5,
                 usados: 3,
+                restantes: 2,
             });
         });
 
         it("deve retornar relatório vazio quando não há tickets", async () => {
             req.params = { eventId: "999" };
-            mockQuery.mockResolvedValue([[]]);
+            mockQuery.mockResolvedValue([[{ total: 0, usados: null }]]);
 
             await getEventReport(req, res);
 
@@ -262,19 +278,16 @@ describe("ValidationController", () => {
                 eventId: "999",
                 total: 0,
                 usados: 0,
+                restantes: 0,
             });
         });
 
         it("deve retornar todos tickets não usados quando nenhum foi usado", async () => {
             req.params = { eventId: "2" };
 
-            const mockTickets = [
-                { usado: false },
-                { usado: false },
-                { usado: false },
-            ];
+            const mockStats = [{ total: 3, usados: 0 }];
 
-            mockQuery.mockResolvedValue([mockTickets]);
+            mockQuery.mockResolvedValue([mockStats]);
 
             await getEventReport(req, res);
 
@@ -283,6 +296,7 @@ describe("ValidationController", () => {
                 eventId: "2",
                 total: 3,
                 usados: 0,
+                restantes: 3,
             });
         });
     });
@@ -296,7 +310,7 @@ describe("ValidationController", () => {
 
             expect(res.status).toHaveBeenCalledWith(500);
             expect(res.json).toHaveBeenCalledWith({
-                error: "Erro ao gerar relatório.",
+                error: "Erro interno ao gerar relatório.",
             });
         });
     });

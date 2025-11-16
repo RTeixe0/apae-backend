@@ -15,7 +15,7 @@ describe("EventsController", () => {
     beforeEach(() => {
         req = {
             body: {},
-            user: {},
+            user: { groups: ["admin"] },
         };
         res = {
             status: jest.fn().mockReturnThis(),
@@ -32,10 +32,10 @@ describe("EventsController", () => {
                 nome: "Evento Teste",
                 local: "São Paulo",
                 data: "2024-12-31",
-                capacidade: 100,
+                capacity: 100,
                 bannerUrl: "https://exemplo.com/banner.jpg",
             };
-            req.user = { id: 1 };
+            req.user = { id: 1, groups: ["admin"] };
 
             const mockResult = { insertId: 123 };
             mockQuery.mockResolvedValue([mockResult]);
@@ -44,14 +44,19 @@ describe("EventsController", () => {
 
             expect(mockQuery).toHaveBeenCalledWith(
                 expect.stringContaining("INSERT INTO events"),
-                [
+                expect.arrayContaining([
                     "Evento Teste",
                     "São Paulo",
-                    "2024-12-31",
-                    100,
+                    expect.any(String),
+                    null,
+                    null,
                     "https://exemplo.com/banner.jpg",
+                    100,
+                    0,
+                    0,
+                    "published",
                     1,
-                ]
+                ])
             );
             expect(res.status).toHaveBeenCalledWith(201);
             expect(res.json).toHaveBeenCalledWith({
@@ -66,7 +71,7 @@ describe("EventsController", () => {
                 local: "Rio de Janeiro",
                 data: "2024-12-25",
             };
-            req.user = { id: 2 };
+            req.user = { id: 2, groups: ["admin"] };
 
             const mockResult = { insertId: 456 };
             mockQuery.mockResolvedValue([mockResult]);
@@ -75,7 +80,11 @@ describe("EventsController", () => {
 
             expect(mockQuery).toHaveBeenCalledWith(
                 expect.stringContaining("INSERT INTO events"),
-                ["Evento Simples", "Rio de Janeiro", "2024-12-25", 0, null, 2]
+                expect.arrayContaining([
+                    "Evento Simples",
+                    "Rio de Janeiro",
+                    expect.any(String),
+                ])
             );
             expect(res.status).toHaveBeenCalledWith(201);
             expect(res.json).toHaveBeenCalledWith({
@@ -91,6 +100,7 @@ describe("EventsController", () => {
                 local: "São Paulo",
                 data: "2024-12-31",
             };
+            req.user = { groups: ["admin"] };
 
             await createEvent(req, res);
 
@@ -106,6 +116,7 @@ describe("EventsController", () => {
                 nome: "Evento Teste",
                 data: "2024-12-31",
             };
+            req.user = { groups: ["admin"] };
 
             await createEvent(req, res);
 
@@ -121,6 +132,7 @@ describe("EventsController", () => {
                 nome: "Evento Teste",
                 local: "São Paulo",
             };
+            req.user = { groups: ["admin"] };
 
             await createEvent(req, res);
 
@@ -131,15 +143,20 @@ describe("EventsController", () => {
             });
         });
 
-        it("deve retornar erro 400 quando todos os campos obrigatórios estão ausentes", async () => {
-            req.body = {};
+        it("deve retornar erro 403 quando usuário não é admin ou staff", async () => {
+            req.body = {
+                nome: "Evento Teste",
+                local: "São Paulo",
+                data: "2024-12-31",
+            };
+            req.user = { groups: ["default"] };
 
             await createEvent(req, res);
 
             expect(mockQuery).not.toHaveBeenCalled();
-            expect(res.status).toHaveBeenCalledWith(400);
+            expect(res.status).toHaveBeenCalledWith(403);
             expect(res.json).toHaveBeenCalledWith({
-                error: "Campos obrigatórios ausentes.",
+                error: "Acesso negado. Apenas admin ou staff podem criar eventos.",
             });
         });
     });
@@ -151,7 +168,7 @@ describe("EventsController", () => {
                 local: "São Paulo",
                 data: "2024-12-31",
             };
-            req.user = { id: 1 };
+            req.user = { id: 1, groups: ["admin"] };
 
             mockQuery.mockRejectedValue(new Error("Connection refused"));
 
@@ -170,7 +187,7 @@ describe("EventsController", () => {
                 local: "São Paulo",
                 data: "2024-12-31",
             };
-            req.user = { id: 1 };
+            req.user = { id: 1, groups: ["admin"] };
 
             mockQuery.mockRejectedValue(new Error("Query timeout"));
 

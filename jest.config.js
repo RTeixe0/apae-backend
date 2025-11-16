@@ -22,4 +22,6 @@ export default {
     resetMocks: true,
 
     verbose: true,
+
+    maxWorkers: "50%",
 };

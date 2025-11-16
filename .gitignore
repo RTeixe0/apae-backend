@@ -25,6 +25,12 @@ Thumbs.db
 config/firebase-key.json
 config/apae-eventos-firebase-adminsdk-fbsvc-1307679f73.json
 
+# Coverage & Test Reports
 coverage/
 *.lcov
 .nyc_output
+reports/
+
+# Stryker Mutator
+.stryker-tmp
+stryker-tmp/
