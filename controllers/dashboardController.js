@@ -1,19 +1,11 @@
 import db from '../config/mysql.js';
 
 /* ============================================================
-   📌 1) OVERVIEW GERAL DO SISTEMA
-   /dashboard/overview
-   - total de eventos
-   - total de tickets
-   - total usados / emitidos
-   - receita total
-============================================================ */
-/* ============================================================
    📌 1) OVERVIEW GERAL DO SISTEMA — CORRIGIDO
 ============================================================ */
 export const getDashboardOverview = async (req, res) => {
   try {
-    // 🔹 1) Métricas gerais
+    // 🔹 1) Métricas globais
     const [rows] = await db.query(`
       SELECT
         (SELECT COUNT(*) FROM events) AS total_events,
@@ -25,14 +17,13 @@ export const getDashboardOverview = async (req, res) => {
 
     const overview = rows[0];
 
-    // 🔹 2) Lista analítica de todos os eventos
+    // 🔹 2) Lista analítica (já corrigida pela view)
     const [events] = await db.query(`
       SELECT *
       FROM v_event_sales
       ORDER BY data DESC
     `);
 
-    // 🔹 3) Enviar TUDO junto
     res.status(200).json({
       ...overview,
       events,
@@ -44,9 +35,7 @@ export const getDashboardOverview = async (req, res) => {
 };
 
 /* ============================================================
-   📌 2) DASHBOARD DE TODOS OS EVENTOS
-   /dashboard/events
-   Usa a view: v_event_sales
+   📌 2) DASHBOARD DE TODOS OS EVENTOS (LISTA)
 ============================================================ */
 export const getEventsDashboard = async (req, res) => {
   try {
@@ -65,24 +54,20 @@ export const getEventsDashboard = async (req, res) => {
 
 /* ============================================================
    📌 3) DETALHES DE UM EVENTO
-   /dashboard/events/:eventId
-   - Dados gerais (view v_event_sales)
-   - Dados de checkins (view v_event_checkins)
-   - Timeline para gráfico (validations)
 ============================================================ */
 export const getEventDetails = async (req, res) => {
   try {
     const { eventId } = req.params;
 
-    // 1) Dados da view de vendas
-    const [sales] = await db.query('SELECT * FROM v_event_sales WHERE event_id = ?', [eventId]);
+    // 🔹 1) Dados de vendas
+    const [sales] = await db.query(`SELECT * FROM v_event_sales WHERE event_id = ?`, [eventId]);
 
-    // 2) Dados da view de check-ins
-    const [checkins] = await db.query('SELECT * FROM v_event_checkins WHERE event_id = ?', [
+    // 🔹 2) Dados resumidos de check-ins
+    const [checkins] = await db.query(`SELECT * FROM v_event_checkins WHERE event_id = ?`, [
       eventId,
     ]);
 
-    // 3) Timeline para gráfico de check-ins por dia
+    // 🔹 3) Timeline (gráfico)
     const [timeline] = await db.query(
       `
       SELECT
