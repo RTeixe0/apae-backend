@@ -1,6 +1,6 @@
-import { v4 as uuidv4 } from "uuid";
-import { generateQRCodeWithLogo } from "../services/qrService.js";
-import db from "../config/mysql.js";
+import { v4 as uuidv4 } from 'uuid';
+import { generateQRCodeWithLogo } from '../services/qrService.js';
+import db from '../config/mysql.js';
 
 /**
  * 🎟️ Cria um ou mais tickets (compra do usuário)
@@ -15,26 +15,26 @@ export const generateTicket = async (req, res) => {
     quantity = Number(quantity);
     if (isNaN(quantity) || quantity <= 0) {
       return res.status(400).json({
-        error: "A quantidade de ingressos deve ser um número positivo.",
+        error: 'A quantidade de ingressos deve ser um número positivo.',
       });
     }
 
     if (!eventId || !buyerEmail) {
       return res.status(400).json({
-        error: "Campos obrigatórios ausentes (eventId e buyerEmail).",
+        error: 'Campos obrigatórios ausentes (eventId e buyerEmail).',
       });
     }
 
     // 🔹 Busca informações do evento
     const [eventRows] = await connection.query(
-      `SELECT id, nome, capacity, sold_count, ticket_price 
-       FROM events 
+      `SELECT id, nome, capacity, sold_count, ticket_price
+       FROM events
        WHERE id = ?`,
-      [eventId]
+      [eventId],
     );
 
     if (eventRows.length === 0) {
-      return res.status(404).json({ error: "Evento não encontrado." });
+      return res.status(404).json({ error: 'Evento não encontrado.' });
     }
 
     const event = eventRows[0];
@@ -42,9 +42,7 @@ export const generateTicket = async (req, res) => {
     // 🔹 Verifica capacidade disponível
     const remaining = event.capacity - event.sold_count;
     if (remaining <= 0) {
-      return res
-        .status(400)
-        .json({ error: "Capacidade esgotada para este evento." });
+      return res.status(400).json({ error: 'Capacidade esgotada para este evento.' });
     }
 
     if (quantity > remaining) {
@@ -62,11 +60,11 @@ export const generateTicket = async (req, res) => {
 
     // 🔹 Gera cada ticket individualmente
     for (let i = 0; i < quantity; i++) {
-      const code = `APAE-${uuidv4().split("-")[0].toUpperCase()}`;
+      const code = `APAE-${uuidv4().split('-')[0].toUpperCase()}`;
       const qrUrl = await generateQRCodeWithLogo(code);
 
       const [insertResult] = await connection.query(
-        `INSERT INTO tickets 
+        `INSERT INTO tickets
           (code, event_id, user_id, buyer_email, payment_id, price_paid, status, qr_url)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
@@ -76,13 +74,14 @@ export const generateTicket = async (req, res) => {
           buyerEmail,
           null, // 🔸 Placeholder para ID de pagamento externo futuro
           ticketPrice,
-          "issued",
+          'issued',
           qrUrl,
-        ]
+        ],
       );
 
       ticketsGenerated.push({
         id: insertResult.insertId,
+        event_id: eventId,
         code,
         qrUrl,
         pricePaid: ticketPrice,
@@ -90,16 +89,16 @@ export const generateTicket = async (req, res) => {
     }
 
     // 🔹 Atualiza contador de ingressos vendidos
-    await connection.query(
-      "UPDATE events SET sold_count = sold_count + ? WHERE id = ?",
-      [quantity, eventId]
-    );
+    await connection.query('UPDATE events SET sold_count = sold_count + ? WHERE id = ?', [
+      quantity,
+      eventId,
+    ]);
 
     await connection.commit();
 
     // 🔹 Resposta final
     res.status(201).json({
-      message: "🎟️ Tickets gerados com sucesso!",
+      message: '🎟️ Tickets gerados com sucesso!',
       event: {
         id: eventId,
         nome: event.nome,
@@ -110,9 +109,9 @@ export const generateTicket = async (req, res) => {
       tickets: ticketsGenerated,
     });
   } catch (err) {
-    console.error("❌ Erro ao gerar ticket:", err);
+    console.error('❌ Erro ao gerar ticket:', err);
     await connection.rollback();
-    res.status(500).json({ error: "Erro interno ao gerar tickets." });
+    res.status(500).json({ error: 'Erro interno ao gerar tickets.' });
   } finally {
     connection.release();
   }
@@ -126,26 +125,24 @@ export const listUserTickets = async (req, res) => {
     const userId = req.user?.id || req.user?.sub;
 
     if (!userId) {
-      return res
-        .status(401)
-        .json({ error: "Usuário não autenticado ou token inválido." });
+      return res.status(401).json({ error: 'Usuário não autenticado ou token inválido.' });
     }
 
     const [rows] = await db.query(
-      `SELECT 
-         t.id, t.code, t.qr_url, t.status, t.price_paid, t.validated_at,
+      `SELECT
+         t.id, t.event_id, t.code, t.qr_url, t.status, t.price_paid, t.validated_at,
          t.buyer_email,
          e.nome AS event_name, e.data AS event_date, e.local AS event_location
        FROM tickets t
        JOIN events e ON e.id = t.event_id
        WHERE t.user_id = ?
        ORDER BY e.data DESC`,
-      [userId]
+      [userId],
     );
 
     res.status(200).json(rows);
   } catch (err) {
-    console.error("❌ Erro ao listar tickets:", err);
-    res.status(500).json({ error: "Erro interno ao listar tickets." });
+    console.error('❌ Erro ao listar tickets:', err);
+    res.status(500).json({ error: 'Erro interno ao listar tickets.' });
   }
 };

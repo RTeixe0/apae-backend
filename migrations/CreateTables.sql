@@ -75,7 +75,7 @@ CREATE TABLE IF NOT EXISTS payments (
   CONSTRAINT fk_payments_user FOREIGN KEY (user_id)
     REFERENCES users (id) ON DELETE RESTRICT ON UPDATE CASCADE,
   CONSTRAINT fk_payments_event FOREIGN KEY (event_id)
-    REFERENCES events (id) ON DELETE RESTRICT ON UPDATE CASCADE,
+    REFERENCES events (id) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT chk_payment_amount CHECK (amount >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -151,7 +151,7 @@ CREATE TABLE IF NOT EXISTS logs (
 -- 📊 View: v_event_sales
 -- ======================================================
 CREATE OR REPLACE VIEW v_event_sales AS
-SELECT 
+SELECT
   e.id AS event_id,
   e.nome AS event_name,
   e.data AS data,
@@ -168,7 +168,7 @@ FROM events e;
 -- 📊 View: v_event_checkins
 -- ======================================================
 CREATE OR REPLACE VIEW v_event_checkins AS
-SELECT 
+SELECT
   e.id AS event_id,
   e.nome AS event_name,
   COUNT(v.id) AS total_scans,
