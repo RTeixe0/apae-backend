@@ -14,17 +14,18 @@ const hasGroup = (req, groupsAllowed) => {
 const formatLocalDate = (dateString) => {
   if (!dateString) return null;
 
-  // Se já está no formato YYYY-MM-DD, não mexe
-  if (typeof dateString === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+  // Se já vier no formato correto, apenas retorna
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
     return dateString;
   }
 
+  // Se vier ISO, extrai a parte da data sem converter fuso
   const d = new Date(dateString);
   if (isNaN(d.getTime())) return null;
 
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
+  const year = d.getUTCFullYear();
+  const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 };
 
