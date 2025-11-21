@@ -1,4 +1,4 @@
-import db from "../config/mysql.js";
+import db from '../config/mysql.js';
 
 /* ============================================================
    📌 1) OVERVIEW GERAL DO SISTEMA
@@ -8,8 +8,12 @@ import db from "../config/mysql.js";
    - total usados / emitidos
    - receita total
 ============================================================ */
+/* ============================================================
+   📌 1) OVERVIEW GERAL DO SISTEMA — CORRIGIDO
+============================================================ */
 export const getDashboardOverview = async (req, res) => {
   try {
+    // 🔹 1) Métricas gerais
     const [rows] = await db.query(`
       SELECT
         (SELECT COUNT(*) FROM events) AS total_events,
@@ -19,13 +23,25 @@ export const getDashboardOverview = async (req, res) => {
         (SELECT COALESCE(SUM(price_paid), 0) FROM tickets) AS total_revenue
     `);
 
-    res.status(200).json(rows[0]);
+    const overview = rows[0];
+
+    // 🔹 2) Lista analítica de todos os eventos
+    const [events] = await db.query(`
+      SELECT *
+      FROM v_event_sales
+      ORDER BY data DESC
+    `);
+
+    // 🔹 3) Enviar TUDO junto
+    res.status(200).json({
+      ...overview,
+      events,
+    });
   } catch (err) {
-    console.error("❌ Erro no getDashboardOverview:", err);
-    res.status(500).json({ error: "Erro interno ao carregar overview." });
+    console.error('❌ Erro no getDashboardOverview:', err);
+    res.status(500).json({ error: 'Erro interno ao carregar overview.' });
   }
 };
-
 
 /* ============================================================
    📌 2) DASHBOARD DE TODOS OS EVENTOS
@@ -42,11 +58,10 @@ export const getEventsDashboard = async (req, res) => {
 
     res.status(200).json(rows);
   } catch (err) {
-    console.error("❌ Erro no getEventsDashboard:", err);
-    res.status(500).json({ error: "Erro ao carregar dados dos eventos." });
+    console.error('❌ Erro no getEventsDashboard:', err);
+    res.status(500).json({ error: 'Erro ao carregar dados dos eventos.' });
   }
 };
-
 
 /* ============================================================
    📌 3) DETALHES DE UM EVENTO
@@ -60,16 +75,12 @@ export const getEventDetails = async (req, res) => {
     const { eventId } = req.params;
 
     // 1) Dados da view de vendas
-    const [sales] = await db.query(
-      "SELECT * FROM v_event_sales WHERE event_id = ?",
-      [eventId]
-    );
+    const [sales] = await db.query('SELECT * FROM v_event_sales WHERE event_id = ?', [eventId]);
 
     // 2) Dados da view de check-ins
-    const [checkins] = await db.query(
-      "SELECT * FROM v_event_checkins WHERE event_id = ?",
-      [eventId]
-    );
+    const [checkins] = await db.query('SELECT * FROM v_event_checkins WHERE event_id = ?', [
+      eventId,
+    ]);
 
     // 3) Timeline para gráfico de check-ins por dia
     const [timeline] = await db.query(
@@ -83,7 +94,7 @@ export const getEventDetails = async (req, res) => {
       GROUP BY DATE(v.scanned_at)
       ORDER BY dia ASC
       `,
-      [eventId]
+      [eventId],
     );
 
     res.status(200).json({
@@ -92,7 +103,7 @@ export const getEventDetails = async (req, res) => {
       timeline: timeline || [],
     });
   } catch (err) {
-    console.error("❌ Erro no getEventDetails:", err);
-    res.status(500).json({ error: "Erro ao carregar detalhes do evento." });
+    console.error('❌ Erro no getEventDetails:', err);
+    res.status(500).json({ error: 'Erro ao carregar detalhes do evento.' });
   }
 };
