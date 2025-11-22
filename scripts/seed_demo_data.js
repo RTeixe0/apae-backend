@@ -12,13 +12,17 @@ const BUYERS = [
 // admin e staff que fazem o scan
 const SCANNERS = [1, 4];
 
-// Constrói um DATETIME real a partir de:
-//   - DATE (2025-08-10)
-//   - TIME (11:00:00)
-function buildDateTime(dateStr, timeStr) {
-  if (!dateStr) return null;
-  if (!timeStr) return new Date(`${dateStr}T00:00:00`);
-  return new Date(`${dateStr}T${timeStr}`);
+function buildDateTime(dateValue, timeValue) {
+  if (!dateValue) return null;
+
+  // Se vier como Date, extrair só YYYY-MM-DD
+  const dateStr = dateValue instanceof Date ? dateValue.toISOString().split('T')[0] : dateValue;
+
+  if (!timeValue || timeValue === null) {
+    return new Date(`${dateStr}T00:00:00`);
+  }
+
+  return new Date(`${dateStr}T${timeValue}`);
 }
 
 function addMinutes(date, minutes) {
