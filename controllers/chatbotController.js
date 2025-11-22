@@ -1,12 +1,14 @@
-import { GoogleAIClient } from '@google-ai/generativelanguage';
+import pkg from '@google-ai/generativelanguage';
 import db from '../config/mysql.js';
+
+const { GoogleAIClient } = pkg;
 
 const client = new GoogleAIClient({
   apiKey: process.env.GEMINI_API_KEY,
 });
 
 /**
- * Cria o prompt seguro que impede alucinação.
+ * Prompt seguro e limitado aos eventos.
  */
 function buildPrompt(eventos, userMessage) {
   const hoje = new Date().toLocaleDateString('pt-BR', {
@@ -20,11 +22,11 @@ function buildPrompt(eventos, userMessage) {
 Você é o Assistente Virtual Oficial do aplicativo APAE Eventos.
 
 REGRAS IMPORTANTES:
-- Responda SOMENTE sobre os eventos cadastrados.
-- Tudo que você disser deve vir dos dados abaixo.
-- Se a resposta não estiver nos dados, diga:
-  "Não encontrei essa informação no sistema."
-- Não fale sobre temas externos ao app.
+- Responda APENAS sobre eventos cadastrados no sistema.
+- Use somente os dados enviados abaixo.
+- Nunca invente datas, nomes ou qualquer informação.
+- Se não souber, diga: "Não encontrei essa informação no sistema."
+- Não fale sobre nada fora do aplicativo.
 - Considere que hoje é: ${hoje}
 
 EVENTOS NO SISTEMA:
@@ -48,10 +50,10 @@ export const sendMessageToAI = async (req, res) => {
 
     const msgLower = message.toLowerCase();
 
-    // 1) Busca evento específico
+    // 1) Buscar evento específico
     const [match] = await db.query(
       `
-      SELECT id, nome, local, data, starts_at, ends_at, ticket_price, status
+      SELECT id, nome, local, data, starts_at, ticket_price, status
       FROM events
       WHERE LOWER(nome) LIKE ?
       ORDER BY data ASC, starts_at ASC
@@ -62,10 +64,8 @@ export const sendMessageToAI = async (req, res) => {
     let eventosParaPrompt = [];
 
     if (match.length > 0) {
-      // Evento específico encontrado
       eventosParaPrompt = match;
     } else {
-      // Nenhum match → manda lista básica
       const [lista] = await db.query(`
         SELECT id, nome, local, data, starts_at, status
         FROM events
@@ -75,13 +75,15 @@ export const sendMessageToAI = async (req, res) => {
       eventosParaPrompt = lista;
     }
 
+    // Gerar prompt final
     const prompt = buildPrompt(eventosParaPrompt, message);
 
-    // 2) Chamada ao Gemini usando o SDK NOVO
+    // 2) Criar instância do modelo (SDK novo)
     const model = client.getGenerativeModel({
-      model: 'gemini-1.5-flash',
+      model: 'models/gemini-1.5-flash',
     });
 
+    // 3) Enviar prompt
     const result = await model.generateContent({
       contents: [
         {
