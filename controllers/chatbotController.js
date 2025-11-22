@@ -5,11 +5,27 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
 
-// Formata data para "05 de dezembro de 2025"
-function formatDate(dateString) {
-  if (!dateString) return 'Não informado';
+function normalizeToISO(value) {
+  if (!value) return null;
 
-  const d = new Date(dateString + 'T00:00:00'); // evita timezone
+  // Se já é string: ok
+  if (typeof value === 'string') return value;
+
+  // Se é Date: converter para YYYY-MM-DD ou YYYY-MM-DDTHH:mm:ss
+  if (value instanceof Date) {
+    return value.toISOString().split('.')[0]; // remove milissegundos
+  }
+
+  return null;
+}
+
+function formatDate(value) {
+  if (!value) return 'Não informado';
+
+  const iso = normalizeToISO(value);
+  if (!iso) return 'Não informado';
+
+  const d = new Date(iso.split('T')[0]); // apenas a parte da data
   if (isNaN(d.getTime())) return 'Não informado';
 
   return d.toLocaleDateString('pt-BR', {
@@ -19,17 +35,19 @@ function formatDate(dateString) {
   });
 }
 
-// Formata hora para "09:00"
-function formatTime(dateTimeString) {
-  if (!dateTimeString) return 'Não informado';
+function formatTime(value) {
+  if (!value) return 'Não informado';
 
-  const d = new Date(dateTimeString);
+  const iso = normalizeToISO(value);
+  if (!iso) return 'Não informado';
+
+  const d = new Date(iso);
   if (isNaN(d.getTime())) return 'Não informado';
 
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
-
-  return `${hh}:${mm}`;
+  return d.toLocaleTimeString('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 // Formata preço para "R$ 80,00"
