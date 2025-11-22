@@ -1,4 +1,6 @@
-// scripts/seed_demo_data.js
+import dotenv from 'dotenv';
+dotenv.config();
+
 import db from '../config/mysql.js';
 
 // compradores fixos (já existem no banco)
