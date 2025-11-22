@@ -1,44 +1,31 @@
 // scripts/seed_demo_data.js
 import db from '../config/mysql.js';
 
-// compradores fixos (já existem no banco)
+// ------------------------------------------
+// Usuários compradores (fixos no banco)
+// ------------------------------------------
 const BUYERS = [
   { id: 2, email: 'renan@renan.com' },
   { id: 3, email: 'user@user.com' },
 ];
 
-// admin e staff que fazem o scan
-const SCANNERS = [1, 4]; // 1 = Admin, 4 = Staff
+// Admin + Staff que escaneiam ingressos
+const SCANNERS = [1, 4];
 
 // ------------------------------------------
-// 🔧 Função robusta para converter datas
-// - Aceita DATE
-// - Aceita DATETIME
-// - Aceita TIME ("18:00:00")
-// - Garante sempre retorno válido
+// Constrói um DATETIME real a partir de:
+//   - DATE (2025-08-10)
+//   - TIME (11:00:00)
 // ------------------------------------------
-function parseDateTime(dateValue, timeValue) {
-  if (!dateValue) return null;
-
-  // Se vier DATE + TIME separados
-  if (timeValue && /^\d{2}:\d{2}:\d{2}$/.test(timeValue)) {
-    return new Date(`${dateValue}T${timeValue}`);
-  }
-
-  // Se vier algo completo (datetime string)
-  if (typeof dateValue === 'string' && dateValue.includes(' ')) {
-    const d = new Date(dateValue);
-    if (!isNaN(d)) return d;
-  }
-
-  // Se vier apenas um DATE puro
-  const dateStr = typeof dateValue === 'string' ? dateValue : dateValue.toISOString().split('T')[0];
-
-  // Se timeValue for inválido, cai no horário 00:00:00
-  return new Date(`${dateStr}T${timeValue || '00:00:00'}`);
+function buildDateTime(dateStr, timeStr) {
+  if (!dateStr) return null;
+  if (!timeStr) return new Date(`${dateStr}T00:00:00`);
+  return new Date(`${dateStr}T${timeStr}`);
 }
 
-// adiciona minutos a uma data
+// ------------------------------------------
+// Soma minutos em uma data válida
+// ------------------------------------------
 function addMinutes(date, minutes) {
   const d = new Date(date);
   d.setMinutes(d.getMinutes() + minutes);
@@ -47,6 +34,7 @@ function addMinutes(date, minutes) {
 
 async function seedDemoData() {
   console.log('🧹 Limpando dados antigos (tickets/payments/validations/logs)...');
+
   await db.query('SET FOREIGN_KEY_CHECKS = 0');
   await db.query('TRUNCATE TABLE validations');
   await db.query('TRUNCATE TABLE logs');
@@ -63,18 +51,20 @@ async function seedDemoData() {
   for (const event of events) {
     const sold = event.sold_count;
     if (!sold || sold <= 0) {
-      console.log(`➡️ Evento ${event.id} - "${event.nome}" sem vendas (sold_count = 0).`);
+      console.log(`➡️ Evento ${event.id} - "${event.nome}" sem vendas. Pulando.`);
       continue;
     }
 
     const price = event.ticket_price;
     const isFinished = event.status === 'finished';
 
-    // % de ingressos usados
+    // ------------------------------------------
+    // Quantos ingressos foram usados
+    // ------------------------------------------
     let used = 0;
     if (isFinished) {
-      if (event.nome === 'Corrida da Inclusão') used = Math.floor(sold * 0.5);
-      else used = Math.floor(sold * 0.85);
+      used =
+        event.nome === 'Corrida da Inclusão' ? Math.floor(sold * 0.5) : Math.floor(sold * 0.85);
     }
 
     console.log(
@@ -83,15 +73,14 @@ async function seedDemoData() {
       }`,
     );
 
-    // DATE do evento
-    const eventDate = parseDateTime(event.data, '00:00:00');
-
-    // START_TIME robusto
-    const startAt = parseDateTime(event.data, event.starts_at?.split(' ')[1] || event.starts_at);
+    const eventDate = new Date(event.data);
+    const startAt = buildDateTime(event.data, event.starts_at);
+    const endAt = buildDateTime(event.data, event.ends_at);
 
     for (let i = 1; i <= sold; i++) {
       const buyer = BUYERS[(i + event.id) % BUYERS.length];
       const code = `EV${String(event.id).padStart(2, '0')}-T${String(i).padStart(3, '0')}`;
+
       const isUsed = i <= used;
 
       // Pagamento: 1 dia antes, meio-dia
@@ -109,25 +98,27 @@ async function seedDemoData() {
       // 1️⃣ PAYMENT
       const [paymentResult] = await db.query(
         `INSERT INTO payments
-             (user_id, event_id, provider, status, amount, currency, transaction_ref, payload_json, paid_at)
-           VALUES (?, ?, ?, 'paid', ?, 'BRL', ?, NULL, ?)`,
+          (user_id, event_id, provider, status, amount, currency, transaction_ref, payload_json, paid_at)
+         VALUES (?, ?, ?, 'paid', ?, 'BRL', ?, NULL, ?)`,
         [buyer.id, event.id, provider, price, transactionRef, paidAt],
       );
+
       const paymentId = paymentResult.insertId;
 
       // 2️⃣ TICKET
       let validatedAt = null;
       let validatedBy = null;
 
-      if (isUsed && startAt) {
-        validatedAt = addMinutes(startAt, 5 + (i % 25));
+      if (isUsed) {
+        const safeStart = startAt || new Date(`${event.data}T00:00:00`);
+        validatedAt = addMinutes(safeStart, 5 + (i % 25));
         validatedBy = SCANNERS[i % SCANNERS.length];
       }
 
       const [ticketResult] = await db.query(
         `INSERT INTO tickets
-             (code, event_id, user_id, buyer_email, payment_id, price_paid, status, qr_url, validated_at, validated_by)
-           VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+          (code, event_id, user_id, buyer_email, payment_id, price_paid, status, qr_url, validated_at, validated_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
         [
           code,
           event.id,
@@ -148,8 +139,8 @@ async function seedDemoData() {
       if (isUsed && validatedAt) {
         await db.query(
           `INSERT INTO validations
-               (ticket_id, event_id, scanner_id, scanned_at, location, meta_json)
-             VALUES (?, ?, ?, ?, 'Entrada principal', NULL)`,
+            (ticket_id, event_id, scanner_id, scanned_at, location, meta_json)
+           VALUES (?, ?, ?, ?, 'Entrada principal', NULL)`,
           [ticketId, event.id, validatedBy, validatedAt],
         );
 
@@ -164,9 +155,10 @@ async function seedDemoData() {
     }
   }
 
-  console.log('✅ Seed concluído!');
+  console.log('✅ Seed concluído com sucesso!');
   console.log(`➡️ Tickets criados: ${totalTickets}`);
   console.log(`➡️ Validações criadas: ${totalValidations}`);
+
   process.exit(0);
 }
 
