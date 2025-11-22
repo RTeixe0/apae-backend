@@ -1,14 +1,10 @@
 import { GoogleGenAI } from '@google/genai';
 import db from '../config/mysql.js';
 
-// Cliente da API Gemini
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
 
-/**
- * Monta o prompt seguro, sem alucinação.
- */
 function buildPrompt(eventos, userMessage) {
   const hoje = new Date().toLocaleDateString('pt-BR', {
     weekday: 'long',
@@ -24,13 +20,13 @@ REGRAS:
 - Responda SOMENTE sobre os eventos cadastrados no sistema.
 - Não invente nada. Se não houver resposta nos dados, diga:
   "Não encontrei essa informação no sistema."
-- Não fale sobre política, esportes, cultura pop, vida pessoal, nada externo ao app.
+- Não fale sobre temas externos ao aplicativo.
 - Hoje é: ${hoje}
 
-EVENTOS NO SISTEMA:
+EVENTOS:
 ${JSON.stringify(eventos, null, 2)}
 
-Pergunta do usuário:
+Pergunta:
 "${userMessage}"
   `;
 }
@@ -48,23 +44,21 @@ export const sendMessageToAI = async (req, res) => {
 
     const msgLower = message.toLowerCase();
 
-    // 1) Busca evento com match no nome
+    let eventosParaPrompt = [];
+
     const [match] = await db.query(
       `
       SELECT id, nome, local, data, starts_at, ticket_price, status
       FROM events
       WHERE LOWER(nome) LIKE ?
       ORDER BY data ASC, starts_at ASC
-    `,
+      `,
       [`%${msgLower}%`],
     );
-
-    let eventosParaPrompt = [];
 
     if (match.length > 0) {
       eventosParaPrompt = match;
     } else {
-      // Caso não encontre, lista eventos
       const [lista] = await db.query(`
         SELECT id, nome, local, data, starts_at, status
         FROM events
@@ -76,7 +70,6 @@ export const sendMessageToAI = async (req, res) => {
 
     const prompt = buildPrompt(eventosParaPrompt, message);
 
-    // 2) Modelo gemini-2.5-flash (estável)
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: [
@@ -87,7 +80,11 @@ export const sendMessageToAI = async (req, res) => {
       ],
     });
 
-    const reply = response.text();
+    // 📌 JEITO CERTO DE PEGAR O TEXTO
+    const reply =
+      response.text ??
+      response.candidates?.[0]?.content?.parts?.[0]?.text ??
+      'Resposta vazia do modelo.';
 
     return res.json({
       success: true,
