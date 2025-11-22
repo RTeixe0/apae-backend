@@ -9,7 +9,8 @@ import eventsRoutes from './routes/events.js';
 import ticketsRoutes from './routes/tickets.js';
 import validationRoutes from './routes/validation.js';
 import paymentRoutes from './routes/payment.js';
-import dashboardRoutes from './routes/dashboard.js'; // << NOVO
+import dashboardRoutes from './routes/dashboard.js';
+import chatbotRoutes from './routes/chatbotRoutes.js';
 
 dotenv.config();
 
@@ -31,6 +32,7 @@ app.use('/events', authenticate, eventsRoutes);
 app.use('/tickets', authenticate, ticketsRoutes);
 app.use('/validation', authenticate, validationRoutes);
 app.use('/payment', authenticate, paymentRoutes);
+app.use('/chatbot', authenticate, chatbotRoutes);
 
 // =======================================================
 // 📊 DASHBOARD – também protegido por autenticação
