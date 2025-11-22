@@ -24,7 +24,20 @@ REGRAS:
 - Hoje é: ${hoje}
 
 EVENTOS:
-${JSON.stringify(eventos, null, 2)}
+${eventos
+  .map(
+    (e) => `
+- ID: ${e.id}
+  Nome: ${e.nome}
+  Local: ${e.local}
+  Data: ${e.data}
+  Início: ${e.starts_at || 'Não informado'}
+  Preço: R$ ${e.ticket_price?.toFixed(2) ?? '0.00'}
+  Status: ${e.status}
+`,
+  )
+  .join('\n')}
+
 
 Pergunta:
 "${userMessage}"
@@ -60,7 +73,7 @@ export const sendMessageToAI = async (req, res) => {
       eventosParaPrompt = match;
     } else {
       const [lista] = await db.query(`
-        SELECT id, nome, local, data, starts_at, status
+        SELECT id, nome, local, data, starts_at, ticket_price, status
         FROM events
         ORDER BY data ASC, starts_at ASC
       `);
