@@ -1,31 +1,24 @@
 // scripts/seed_demo_data.js
 import db from '../config/mysql.js';
 
-// ------------------------------------------
-// Usuários compradores (fixos no banco)
-// ------------------------------------------
+// compradores fixos (já existem no banco)
 const BUYERS = [
   { id: 2, email: 'renan@renan.com' },
   { id: 3, email: 'user@user.com' },
 ];
 
-// Admin + Staff que escaneiam ingressos
+// admin e staff que fazem o scan
 const SCANNERS = [1, 4];
 
-// ------------------------------------------
 // Constrói um DATETIME real a partir de:
 //   - DATE (2025-08-10)
 //   - TIME (11:00:00)
-// ------------------------------------------
 function buildDateTime(dateStr, timeStr) {
   if (!dateStr) return null;
   if (!timeStr) return new Date(`${dateStr}T00:00:00`);
   return new Date(`${dateStr}T${timeStr}`);
 }
 
-// ------------------------------------------
-// Soma minutos em uma data válida
-// ------------------------------------------
 function addMinutes(date, minutes) {
   const d = new Date(date);
   d.setMinutes(d.getMinutes() + minutes);
@@ -33,7 +26,7 @@ function addMinutes(date, minutes) {
 }
 
 async function seedDemoData() {
-  console.log('🧹 Limpando dados antigos (tickets/payments/validations/logs)...');
+  console.log('🧹 Limpando dados antigos...');
 
   await db.query('SET FOREIGN_KEY_CHECKS = 0');
   await db.query('TRUNCATE TABLE validations');
@@ -50,50 +43,37 @@ async function seedDemoData() {
 
   for (const event of events) {
     const sold = event.sold_count;
-    if (!sold || sold <= 0) {
-      console.log(`➡️ Evento ${event.id} - "${event.nome}" sem vendas. Pulando.`);
+    if (sold <= 0) {
+      console.log(`➡️ Evento ${event.id} sem vendas`);
       continue;
     }
 
     const price = event.ticket_price;
     const isFinished = event.status === 'finished';
 
-    // ------------------------------------------
-    // Quantos ingressos foram usados
-    // ------------------------------------------
     let used = 0;
     if (isFinished) {
       used =
         event.nome === 'Corrida da Inclusão' ? Math.floor(sold * 0.5) : Math.floor(sold * 0.85);
     }
 
-    console.log(
-      `🎉 Evento ${event.id} - "${event.nome}": vendidos=${sold}, usados=${used}, emitidos=${
-        sold - used
-      }`,
-    );
+    console.log(`🎉 Evento ${event.id} - "${event.nome}": vendidos=${sold}, usados=${used}`);
 
-    const eventDate = new Date(event.data);
     const startAt = buildDateTime(event.data, event.starts_at);
-    const endAt = buildDateTime(event.data, event.ends_at);
 
     for (let i = 1; i <= sold; i++) {
       const buyer = BUYERS[(i + event.id) % BUYERS.length];
-      const code = `EV${String(event.id).padStart(2, '0')}-T${String(i).padStart(3, '0')}`;
 
       const isUsed = i <= used;
+      const code = `EV${String(event.id).padStart(2, '0')}-T${String(i).padStart(3, '0')}`;
 
-      // Pagamento: 1 dia antes, meio-dia
-      const paidAt = new Date(eventDate);
+      // Pagamento no dia anterior
+      const paidAt = new Date(`${event.data}T12:00:00`);
       paidAt.setDate(paidAt.getDate() - 1);
-      paidAt.setHours(12, 0, 0, 0);
 
       const providerOptions = ['pix', 'stripe', 'mercadopago'];
       const provider = providerOptions[i % providerOptions.length];
-      const transactionRef = `PAY-EV${String(event.id).padStart(2, '0')}-T${String(i).padStart(
-        3,
-        '0',
-      )}`;
+      const transactionRef = `PAY-${event.id}-${i}`;
 
       // 1️⃣ PAYMENT
       const [paymentResult] = await db.query(
@@ -110,7 +90,7 @@ async function seedDemoData() {
       let validatedBy = null;
 
       if (isUsed) {
-        const safeStart = startAt || new Date(`${event.data}T00:00:00`);
+        const safeStart = startAt ?? new Date(`${event.data}T00:00:00`);
         validatedAt = addMinutes(safeStart, 5 + (i % 25));
         validatedBy = SCANNERS[i % SCANNERS.length];
       }
@@ -136,7 +116,7 @@ async function seedDemoData() {
       totalTickets++;
 
       // 3️⃣ VALIDATION + LOG
-      if (isUsed && validatedAt) {
+      if (isUsed) {
         await db.query(
           `INSERT INTO validations
             (ticket_id, event_id, scanner_id, scanned_at, location, meta_json)
@@ -155,9 +135,9 @@ async function seedDemoData() {
     }
   }
 
-  console.log('✅ Seed concluído com sucesso!');
-  console.log(`➡️ Tickets criados: ${totalTickets}`);
-  console.log(`➡️ Validações criadas: ${totalValidations}`);
+  console.log('✅ Seed concluído!');
+  console.log(`🎟️ Tickets criados: ${totalTickets}`);
+  console.log(`🔍 Validações criadas: ${totalValidations}`);
 
   process.exit(0);
 }
