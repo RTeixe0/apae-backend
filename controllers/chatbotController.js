@@ -32,7 +32,7 @@ ${eventos
   Local: ${e.local}
   Data: ${e.data}
   Início: ${e.starts_at || 'Não informado'}
-  Preço: R$ ${e.ticket_price?.toFixed(2) ?? '0.00'}
+  Preço: R$ ${e.ticket_price != null ? parseFloat(e.ticket_price).toFixed(2) : '0.00'}
   Status: ${e.status}
 `,
   )
