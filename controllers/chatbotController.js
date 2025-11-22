@@ -38,16 +38,20 @@ function formatDate(value) {
 function formatTime(value) {
   if (!value) return 'Não informado';
 
-  const iso = normalizeToISO(value);
-  if (!iso) return 'Não informado';
+  // Se for string no padrão HH:MM:SS
+  if (typeof value === 'string' && /^\d{2}:\d{2}:\d{2}$/.test(value)) {
+    const [hh, mm] = value.split(':');
+    return `${hh}:${mm}`;
+  }
 
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return 'Não informado';
+  // Se vier como Date (casos raros)
+  if (value instanceof Date) {
+    const hh = String(value.getHours()).padStart(2, '0');
+    const mm = String(value.getMinutes()).padStart(2, '0');
+    return `${hh}:${mm}`;
+  }
 
-  return d.toLocaleTimeString('pt-BR', {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return 'Não informado';
 }
 
 // Formata preço para "R$ 80,00"
