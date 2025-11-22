@@ -1,32 +1,30 @@
-import pkg from '@google-ai/generativelanguage';
-import db from '../config/mysql.js';
+import { GoogleGenAI } from "@google/genai";
+import db from "../config/mysql.js";
 
-const { GoogleAIClient } = pkg;
-
-const client = new GoogleAIClient({
-  apiKey: process.env.GEMINI_API_KEY,
-});
+// O client lê automaticamente a variável GEMINI_API_KEY do ambiente
+const ai = new GoogleGenAI({});
 
 /**
- * Prompt seguro e limitado aos eventos.
+ * Cria o prompt seguro que impede alucinações.
  */
 function buildPrompt(eventos, userMessage) {
-  const hoje = new Date().toLocaleDateString('pt-BR', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
+  const hoje = new Date().toLocaleDateString("pt-BR", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
   });
 
   return `
 Você é o Assistente Virtual Oficial do aplicativo APAE Eventos.
 
 REGRAS IMPORTANTES:
-- Responda APENAS sobre eventos cadastrados no sistema.
-- Use somente os dados enviados abaixo.
-- Nunca invente datas, nomes ou qualquer informação.
-- Se não souber, diga: "Não encontrei essa informação no sistema."
-- Não fale sobre nada fora do aplicativo.
+- Responda SOMENTE sobre os eventos cadastrados.
+- Nunca invente dados.
+- Use exclusivamente as informações fornecidas nos eventos abaixo.
+- Se não houver resposta possível, diga:
+  "Não encontrei essa informação no sistema."
+- Não fale de temas externos ao app.
 - Considere que hoje é: ${hoje}
 
 EVENTOS NO SISTEMA:
@@ -34,31 +32,31 @@ ${JSON.stringify(eventos, null, 2)}
 
 Pergunta do usuário:
 "${userMessage}"
-  `;
+`;
 }
 
 export const sendMessageToAI = async (req, res) => {
   try {
     const { message } = req.body;
 
-    if (!message || message.trim() === '') {
+    if (!message || message.trim() === "") {
       return res.status(400).json({
         success: false,
-        message: 'Mensagem vazia.',
+        message: "Mensagem vazia.",
       });
     }
 
     const msgLower = message.toLowerCase();
 
-    // 1) Buscar evento específico
+    // 1) Busca evento específico
     const [match] = await db.query(
       `
-      SELECT id, nome, local, data, starts_at, ticket_price, status
+      SELECT id, nome, local, data, starts_at, ends_at, ticket_price, status
       FROM events
       WHERE LOWER(nome) LIKE ?
       ORDER BY data ASC, starts_at ASC
     `,
-      [`%${msgLower}%`],
+      [`%${msgLower}%`]
     );
 
     let eventosParaPrompt = [];
@@ -71,36 +69,27 @@ export const sendMessageToAI = async (req, res) => {
         FROM events
         ORDER BY data ASC, starts_at ASC
       `);
-
       eventosParaPrompt = lista;
     }
 
-    // Gerar prompt final
     const prompt = buildPrompt(eventosParaPrompt, message);
 
-    // 2) Criar instância do modelo (SDK novo)
-    const model = client.getGenerativeModel({
-      model: 'models/gemini-1.5-flash',
+    // 2) Chamada ao Gemini com SDK atualizado
+    const response = await ai.models.generateContent({
+      model: "gemini-1.5-flash", // ou "gemini-2.5-flash"
+      contents: prompt,
     });
 
-    // 3) Enviar prompt
-    const result = await model.generateContent({
-      contents: [
-        {
-          role: 'user',
-          parts: [{ text: prompt }],
-        },
-      ],
+    return res.json({
+      success: true,
+      reply: response.text,
     });
 
-    const reply = result.response.text();
-
-    return res.json({ success: true, reply });
   } catch (err) {
-    console.error('🔥 Erro no chatbot:', err);
+    console.error("🔥 Erro no chatbot:", err);
     return res.status(500).json({
       success: false,
-      message: 'Erro interno no chatbot',
+      message: "Erro interno no chatbot",
     });
   }
 };
