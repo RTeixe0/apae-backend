@@ -19,6 +19,15 @@ function normalizeToISO(value) {
   return null;
 }
 
+function getHojeBrasilISO() {
+  const now = new Date();
+
+  // Ajuste manual para UTC-3 (Brasil)
+  const utc3 = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+
+  return utc3.toISOString().split('T')[0];
+}
+
 function formatDate(value) {
   if (!value) return 'Não informado';
 
@@ -67,7 +76,7 @@ function formatPrice(value) {
   });
 }
 
-function buildPrompt(eventos, userMessage) {
+function buildPrompt(eventos, eventosHoje, userMessage, hoje) {
   const hoje = new Date().toLocaleDateString('pt-BR', {
     weekday: 'long',
     year: 'numeric',
@@ -78,14 +87,39 @@ function buildPrompt(eventos, userMessage) {
   return `
 Você é o Assistente Virtual Oficial do aplicativo APAE Eventos.
 
-REGRAS:
-- Responda SOMENTE sobre os eventos cadastrados no sistema.
-- Não invente nada. Se não houver resposta nos dados, diga:
-  "Não encontrei essa informação no sistema."
-- Não fale sobre temas externos ao aplicativo.
-- Hoje é: ${hoje}
+Sua função é responder perguntas sobre os eventos cadastrados neste sistema.
+Você deve sempre basear suas respostas EXCLUSIVAMENTE nos dados exibidos abaixo.
 
-EVENTOS:
+INSTRUÇÕES IMPORTANTES:
+- Nunca invente informações que não estejam listadas nos eventos.
+- Se não houver dados suficientes, responda exatamente:
+  "Não encontrei essa informação no sistema."
+- Fale sempre de forma clara, objetiva e educada.
+- A data de hoje é: ${hoje}
+- Quando o usuário perguntar por eventos de hoje, compare a data ${hoje}
+  com a data de cada evento.
+- Se houver vários eventos relevantes, explique de forma organizada.
+
+EVENTOS DE HOJE:
+${
+  eventosHoje.length === 0
+    ? 'Nenhum evento está programado para hoje.'
+    : eventosHoje
+        .map(
+          (e) => `
+- ID: ${e.id}
+  Nome: ${e.nome}
+  Local: ${e.local}
+  Data: ${formatDate(e.data)}
+  Início: ${formatTime(e.starts_at)}
+  Preço: ${formatPrice(e.ticket_price)}
+  Status: ${e.status}
+`,
+        )
+        .join('\n')
+}
+
+TODOS OS EVENTOS DISPONÍVEIS:
 ${eventos
   .map(
     (e) => `
@@ -100,10 +134,11 @@ ${eventos
   )
   .join('\n')}
 
-
-Pergunta:
+PERGUNTA DO USUÁRIO:
 "${userMessage}"
-  `;
+
+Responda levando em conta SOMENTE as informações acima.
+`;
 }
 
 export const sendMessageToAI = async (req, res) => {
@@ -116,6 +151,17 @@ export const sendMessageToAI = async (req, res) => {
         message: 'Mensagem vazia.',
       });
     }
+    const hoje = getHojeBrasilISO();
+
+    const [hojeEventos] = await db.query(
+      `
+      SELECT id, nome, local, data, starts_at, ticket_price, status
+      FROM events
+      WHERE data = ?
+      ORDER BY starts_at ASC
+      `,
+      [hoje],
+    );
 
     const msgLower = message.toLowerCase();
 
@@ -143,7 +189,7 @@ export const sendMessageToAI = async (req, res) => {
       eventosParaPrompt = lista;
     }
 
-    const prompt = buildPrompt(eventosParaPrompt, message);
+    const prompt = buildPrompt(eventosParaPrompt, hojeEventos, message, hoje);
 
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
