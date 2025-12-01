@@ -77,13 +77,6 @@ function formatPrice(value) {
 }
 
 function buildPrompt(eventos, eventosHoje, userMessage, hoje) {
-  const hoje = new Date().toLocaleDateString('pt-BR', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
-
   return `
 Você é o Assistente Virtual Oficial do aplicativo APAE Eventos.
 
