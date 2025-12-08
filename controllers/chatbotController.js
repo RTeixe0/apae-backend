@@ -93,6 +93,12 @@ INSTRUÇÕES IMPORTANTES:
   com a data de cada evento.
 - Se houver vários eventos relevantes, explique de forma organizada.
 
+Sobre a APAE de Itapira:
+• Associação sem fins lucrativos, fundada em 19 de agosto de 1971.
+• Sediada na Rua Jacob Audi, 132, Vila Penha do Rio do Peixe, Itapira/SP.
+• Oferece atividades de assistência social, saúde mental e apoio comunitário.
+• Contato: (19) 3813-8899, email secretaria@apaeitapira.org.br
+
 EVENTOS DE HOJE:
 ${
   eventosHoje.length === 0
